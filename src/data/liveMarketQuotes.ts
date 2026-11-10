@@ -1,4 +1,40 @@
 export const VERIFIED_LIVE_QUOTES: Record<string, { price: number; mcapCr: number; pe: number; pb: number; hi: number; lo: number; yieldPct: number }> = {
+  "CANBK": {
+    "price": 128.1,
+    "mcapCr": 116195,
+    "pe": 7.2,
+    "pb": 1.12,
+    "hi": 130.5,
+    "lo": 98.4,
+    "yieldPct": 2.85
+  },
+  "UNIONBANK": {
+    "price": 197.0,
+    "mcapCr": 150382,
+    "pe": 8.1,
+    "pb": 1.25,
+    "hi": 202.4,
+    "lo": 115.8,
+    "yieldPct": 2.45
+  },
+  "YESBANK": {
+    "price": 17.03,
+    "mcapCr": 53458,
+    "pe": 28.5,
+    "pb": 1.28,
+    "hi": 26.2,
+    "lo": 16.5,
+    "yieldPct": 0
+  },
+  "AUBANK": {
+    "price": 929.0,
+    "mcapCr": 69621,
+    "pe": 32.4,
+    "pb": 4.15,
+    "hi": 1045,
+    "lo": 554,
+    "yieldPct": 0.35
+  },
   "RELIANCE": {
     "price": 1324.4,
     "mcapCr": 1792241,

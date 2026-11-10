@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { IndianCompany, resolveOrGenerateCompany } from '../data/indianCompanies';
 import { formatInrCrores, exportToCsv } from '../utils/formatters';
 import { 
@@ -13,7 +13,11 @@ import {
   Search, 
   X, 
   PlusCircle,
-  Building
+  Building,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 
 interface AllCompaniesAnalyticsProps {
@@ -39,8 +43,17 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
   const [sortCol, setSortCol] = useState<SortColumn>('marketCapCr');
   const [sortDir, setSortDir] = useState<SortDirection>('desc');
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(15);
+
+  // Reset to first page when search, sector, or sort changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedSector, sortCol, sortDir]);
+
   // Compute metrics for all companies
-  const companyAnalytics = React.useMemo(() => {
+  const companyAnalytics = useMemo(() => {
     return companies.map(c => {
       const records = periodType === 'yearly' ? c.yearlyData : c.quarterlyData;
       const latest = records[records.length - 1];
@@ -65,7 +78,7 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
   const sectors = ['All', ...Array.from(new Set(companies.map(c => c.sector)))];
 
   // Real-time multi-token search
-  const filteredAndSorted = React.useMemo(() => {
+  const filteredAndSorted = useMemo(() => {
     let list = companyAnalytics.filter(c => {
       // Threshold check
       if (c.marketCapCr < 500) return false;
@@ -91,6 +104,14 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
 
     return list;
   }, [companyAnalytics, searchTerm, selectedSector, sortCol, sortDir]);
+
+  // Pagination calculation
+  const totalItems = filteredAndSorted.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (safeCurrentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+  const paginatedRows = filteredAndSorted.slice(startIndex, endIndex);
 
   const handleSort = (col: SortColumn) => {
     if (sortCol === col) {
@@ -139,7 +160,7 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
             Displaying <strong className="text-white">{filteredAndSorted.length}</strong> of{' '}
-            <strong className="text-white">{companyAnalytics.length}</strong> companies listed on NSE &amp; BSE ({periodType === 'yearly' ? 'Annual' : 'Quarterly'} Data)
+            <strong className="text-white">{companyAnalytics.length}</strong> listed Indian companies ({periodType === 'yearly' ? 'Annual' : 'Quarterly'} Data)
           </p>
         </div>
 
@@ -152,7 +173,7 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
         </button>
       </div>
 
-      {/* Search Input and Sector Filter Chips */}
+      {/* Search Input and Sector Filter Tabs */}
       <div className="py-3 border-b border-slate-800/60 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
         {/* Search bar */}
         <div className="relative w-full md:w-96">
@@ -161,8 +182,8 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
             type="text"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            placeholder="Search by company name, ticker (e.g. ZOMATO, MARUTI, TCS)..."
-            className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-8 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+            placeholder="Search company, ticker, BSE code, or sector..."
+            className="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 rounded-lg pl-9 pr-8 py-2 text-xs text-slate-100 placeholder-slate-500 outline-none transition-colors"
           />
           {searchTerm && (
             <button
@@ -193,7 +214,7 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
       </div>
 
       {/* Comprehensive Table */}
-      <div className="overflow-x-auto mt-2 max-h-[520px] overflow-y-auto pr-1">
+      <div className="overflow-x-auto mt-2 pr-1">
         <table className="w-full text-left text-xs">
           <thead className="sticky top-0 bg-slate-950 z-10 text-slate-400 border-b border-slate-800 font-medium">
             <tr>
@@ -241,7 +262,7 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60 font-mono tabular-nums">
-            {filteredAndSorted.map(c => {
+            {paginatedRows.map(c => {
               const isSelected = c.id === selectedCompanyId;
               return (
                 <tr
@@ -250,53 +271,54 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
                     isSelected ? 'bg-blue-950/30' : ''
                   }`}
                 >
-                  <td className="py-2.5 px-3 font-sans">
-                    <div className="font-semibold text-white flex items-center gap-1.5">
+                  <td className="py-3 px-3">
+                    <div className="font-sans font-semibold text-white flex items-center gap-1.5">
                       <span>{c.name}</span>
                       {isSelected && (
-                        <span className="text-[10px] font-mono text-blue-400 bg-blue-950 px-1 py-0.2 rounded border border-blue-800">
-                          Active
-                        </span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
                       )}
                     </div>
-                    <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                      NSE: {c.symbol} · BSE: {c.bseCode}
+                    <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+                      <span className="font-mono text-blue-300">{c.symbol}</span>
+                      <span className="text-slate-600">·</span>
+                      <span className="font-mono text-slate-500">BSE {c.bseCode}</span>
+                      <span className="text-slate-600">·</span>
+                      <span className="font-sans text-slate-300">₹{c.sharePriceInr.toLocaleString('en-IN')}</span>
                     </div>
                   </td>
-
-                  <td className="py-2.5 px-3 font-sans text-slate-400">
-                    <div className="text-slate-300 font-medium">{c.industry}</div>
-                    <div className="text-[10px] text-slate-500">{c.category}</div>
+                  <td className="py-3 px-3 font-sans text-slate-300">
+                    <div>{c.industry}</div>
+                    <div className="text-[11px] text-slate-400">{c.sector}</div>
                   </td>
-
-                  {/* Market Cap (Blue) */}
-                  <td className="py-2.5 px-3 text-right text-blue-400 font-semibold">
+                  <td className="py-3 px-3 text-right text-blue-400 font-bold">
                     <div>{formatInrCrores(c.marketCapCr, true)}</div>
-                    <div className="text-[10px] text-slate-500 font-normal">
-                      ₹{c.marketCapCr.toLocaleString('en-IN')} Cr
+                    <div className="text-[10px] text-slate-400 font-normal">
+                      ({formatInrCrores(c.marketCapCr, false)})
                     </div>
                   </td>
-
-                  {/* PAT (Green) */}
-                  <td className="py-2.5 px-3 text-right text-emerald-400 font-semibold">
+                  <td className="py-3 px-3 text-right text-emerald-400 font-bold">
                     {formatInrCrores(c.patCr, false)}
                   </td>
-
-                  {/* PAT Margin */}
-                  <td className="py-2.5 px-3 text-right text-slate-200">
-                    {c.patMarginPct}%
+                  <td className="py-3 px-3 text-right text-slate-300">
+                    <span
+                      className={`font-semibold ${
+                        c.patMarginPct >= 15
+                          ? 'text-emerald-400'
+                          : c.patMarginPct >= 8
+                          ? 'text-slate-200'
+                          : 'text-amber-400'
+                      }`}
+                    >
+                      {c.patMarginPct}%
+                    </span>
                   </td>
-
-                  {/* P/E Multiple */}
-                  <td className="py-2.5 px-3 text-right text-slate-300">
+                  <td className="py-3 px-3 text-right text-slate-300">
                     {c.peRatio}x
                   </td>
-
-                  {/* Action Button */}
-                  <td className="py-2.5 px-3 text-center font-sans">
+                  <td className="py-3 px-3 text-center">
                     <button
                       onClick={() => onSelectCompany(c.id)}
-                      className={`px-3 py-1 text-xs font-medium rounded transition-all ${
+                      className={`px-2.5 py-1 text-xs rounded transition-colors font-sans font-medium ${
                         isSelected
                           ? 'bg-blue-600 text-white shadow-sm'
                           : 'text-blue-400 hover:text-white bg-blue-950/80 hover:bg-blue-600 border border-blue-800/80'
@@ -331,6 +353,83 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Controls */}
+      {totalItems > 0 && (
+        <div className="mt-4 pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
+          <div className="flex items-center gap-2">
+            <span>
+              Showing <strong className="text-white">{startIndex + 1}</strong> to{' '}
+              <strong className="text-white">{endIndex}</strong> of{' '}
+              <strong className="text-white">{totalItems}</strong> companies
+            </span>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {/* Page Size Selector */}
+            <div className="flex items-center gap-1.5">
+              <span>Per page:</span>
+              <select
+                value={pageSize}
+                onChange={e => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 outline-none focus:border-blue-500"
+              >
+                <option value={15}>15</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+
+            {/* Page navigation */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={safeCurrentPage === 1}
+                title="First Page"
+                className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={safeCurrentPage === 1}
+                title="Previous Page"
+                className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <span className="px-2 font-mono text-slate-200">
+                Page <strong className="text-white">{safeCurrentPage}</strong> of{' '}
+                <strong className="text-white">{totalPages}</strong>
+              </span>
+
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={safeCurrentPage === totalPages}
+                title="Next Page"
+                className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={safeCurrentPage === totalPages}
+                title="Last Page"
+                className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

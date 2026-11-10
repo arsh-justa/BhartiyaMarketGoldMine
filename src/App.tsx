@@ -123,11 +123,11 @@ export default function App() {
             <a href="#competitors-section" className="hover:text-white transition-colors whitespace-nowrap shrink-0">
               Competitor Benchmark
             </a>
-            <a href="#all-companies-section" className="hover:text-white transition-colors whitespace-nowrap shrink-0">
-              All Companies
-            </a>
             <a href="#select-section" className="hover:text-white transition-colors whitespace-nowrap shrink-0">
               Company Switcher
+            </a>
+            <a href="#all-companies-section" className="hover:text-white transition-colors whitespace-nowrap shrink-0">
+              All Companies
             </a>
           </nav>
 
@@ -178,17 +178,6 @@ export default function App() {
           />
         </section>
 
-        {/* Section: Aggregate Analysis for All Companies > 500 Cr with full real-time search */}
-        <section id="all-companies-section" aria-label="Aggregate Analysis All Companies Above 500 Cr">
-          <AllCompaniesAnalytics
-            companies={companies}
-            onSelectCompany={setSelectedCompanyId}
-            selectedCompanyId={selectedCompanyId}
-            periodType={periodType}
-            onAddCustomCompany={handleAddCustomCompany}
-          />
-        </section>
-
         {/* Quick Company Selector */}
         <section id="select-section" aria-label="Select Company">
           <CompanySelector
@@ -196,6 +185,17 @@ export default function App() {
             selectedCompanyId={selectedCompanyId}
             onSelectCompany={setSelectedCompanyId}
             periodType={periodType}
+          />
+        </section>
+
+        {/* Section: Aggregate Analysis for All Companies > 500 Cr (Moved to Last, with Pagination) */}
+        <section id="all-companies-section" aria-label="Aggregate Analysis All Companies Above 500 Cr">
+          <AllCompaniesAnalytics
+            companies={companies}
+            onSelectCompany={setSelectedCompanyId}
+            selectedCompanyId={selectedCompanyId}
+            periodType={periodType}
+            onAddCustomCompany={handleAddCustomCompany}
           />
         </section>
       </main>

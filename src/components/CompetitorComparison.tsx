@@ -15,6 +15,101 @@ interface CompetitorComparisonProps {
   periodType?: 'quarterly' | 'yearly';
 }
 
+/**
+ * Domain-aware affinity checker to strictly prevent cross-sector contamination
+ * (e.g. Telecom companies like Airtel must NEVER appear in Private Banking peers!)
+ */
+function areCompaniesInSameDomain(a: IndianCompany, b: IndianCompany): boolean {
+  if (a.id === b.id) return true;
+
+  // 1. Direct explicit peer list
+  if (a.peers?.includes(b.symbol) || b.peers?.includes(a.symbol)) {
+    return true;
+  }
+
+  const aInd = a.industry.toLowerCase();
+  const bInd = b.industry.toLowerCase();
+  const aSec = a.sector.toLowerCase();
+  const bSec = b.sector.toLowerCase();
+
+  // 2. Exact industry match
+  if (aInd === bInd) return true;
+
+  // 3. Banking domain (Private, Public, Commercial & Retail Banking)
+  const isABank = aInd.includes('bank') || aSec.includes('banking');
+  const isBBank = bInd.includes('bank') || bSec.includes('banking');
+  if (isABank) {
+    // Only commercial banks or direct financial lending institutions
+    return isBBank || bInd.includes('nbfc') || bInd.includes('lending');
+  }
+  if (isBBank) return false;
+
+  // 4. Financial Services & FinTech / Exchanges / Broking
+  const isAFin = aSec.includes('financial') || aSec.includes('banking');
+  const isBFin = bSec.includes('financial') || bSec.includes('banking');
+  if (isAFin) {
+    return isBFin;
+  }
+  if (isBFin) return false;
+
+  // 5. Information Technology & Software / Cloud
+  const isAIT = aSec.includes('information technology') || aInd.includes('software') || aInd.includes('it services');
+  const isBIT = bSec.includes('information technology') || bInd.includes('software') || bInd.includes('it services');
+  if (isAIT) {
+    return isBIT;
+  }
+  if (isBIT) return false;
+
+  // 6. Telecommunications
+  const isATelecom = aSec.includes('telecom') || aInd.includes('telecom');
+  const isBTelecom = bSec.includes('telecom') || bInd.includes('telecom');
+  if (isATelecom) {
+    return isBTelecom;
+  }
+  if (isBTelecom) return false;
+
+  // 7. Automotive OEMs & Auto Components
+  const isAAuto = aSec.includes('automotive') || aInd.includes('auto') || aInd.includes('vehicle');
+  const isBAuto = bSec.includes('automotive') || bInd.includes('auto') || bInd.includes('vehicle');
+  if (isAAuto) {
+    return isBAuto;
+  }
+  if (isBAuto) return false;
+
+  // 8. Energy, Power, Oil & Gas
+  const isAEnergy = aSec.includes('energy') || aInd.includes('oil') || aInd.includes('gas') || aInd.includes('power');
+  const isBEnergy = bSec.includes('energy') || bInd.includes('oil') || bInd.includes('gas') || bInd.includes('power');
+  if (isAEnergy) {
+    return isBEnergy || bSec.includes('conglomerate');
+  }
+
+  // 9. Pharma, Healthcare & Hospitals
+  const isAPharma = aSec.includes('healthcare') || aSec.includes('pharma') || aInd.includes('medicine') || aInd.includes('hospital');
+  const isBPharma = bSec.includes('healthcare') || bSec.includes('pharma') || bInd.includes('medicine') || bInd.includes('hospital');
+  if (isAPharma) {
+    return isBPharma;
+  }
+  if (isBPharma) return false;
+
+  // 10. FMCG & Consumer Retail
+  const isAFmcg = aSec.includes('fmcg') || aSec.includes('consumer') || aInd.includes('retail') || aInd.includes('food');
+  const isBFmcg = bSec.includes('fmcg') || bSec.includes('consumer') || bInd.includes('retail') || bInd.includes('food');
+  if (isAFmcg) {
+    return isBFmcg;
+  }
+  if (isBFmcg) return false;
+
+  // 11. Metals, Mining & Materials
+  const isAMetal = aSec.includes('metals') || aSec.includes('materials') || aInd.includes('steel') || aInd.includes('mining') || aInd.includes('cement');
+  const isBMetal = bSec.includes('metals') || bSec.includes('materials') || bInd.includes('steel') || bInd.includes('mining') || bInd.includes('cement');
+  if (isAMetal) {
+    return isBMetal;
+  }
+
+  // Default: strictly same sector
+  return a.sector === b.sector;
+}
+
 export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
   currentCompany,
   allCompanies,
@@ -22,7 +117,7 @@ export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
 }) => {
   const [filterMode, setFilterMode] = useState<'direct-industry' | 'same-sector'>('direct-industry');
 
-  // Identify at least 10 competitor companies
+  // Identify at least 10 competitor companies strictly within the same industry/domain
   const competitors = React.useMemo(() => {
     const list: IndianCompany[] = [];
     const addedIds = new Set<string>();
@@ -40,7 +135,7 @@ export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
       }
     });
 
-    // 3. Same industry peers
+    // 3. Same exact industry peers (e.g. Private Banking)
     allCompanies.forEach(c => {
       if (!addedIds.has(c.id) && c.industry === currentCompany.industry) {
         list.push(c);
@@ -48,32 +143,22 @@ export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
       }
     });
 
-    // 4. Same sector peers if we need more to fulfill the minimum 10 peers requirement
-    if (list.length < 11 || filterMode === 'same-sector') {
+    // 4. Domain-compatible peers (e.g. Public Banking & Private Banking peers for any Bank)
+    allCompanies.forEach(c => {
+      if (!addedIds.has(c.id) && areCompaniesInSameDomain(currentCompany, c)) {
+        list.push(c);
+        addedIds.add(c.id);
+      }
+    });
+
+    // 5. If filterMode is 'same-sector', include all remaining in the exact same sector
+    if (filterMode === 'same-sector') {
       allCompanies.forEach(c => {
         if (!addedIds.has(c.id) && c.sector === currentCompany.sector) {
           list.push(c);
           addedIds.add(c.id);
         }
       });
-    }
-
-    // 5. If still fewer than 11 total (current + 10 peers), add closest market cap companies across the universe
-    if (list.length < 11) {
-      const currentMcap = currentCompany.yearlyData[currentCompany.yearlyData.length - 1]?.marketCapCr || 0;
-      const remaining = allCompanies
-        .filter(c => !addedIds.has(c.id))
-        .sort((a, b) => {
-          const mcapA = a.yearlyData[a.yearlyData.length - 1]?.marketCapCr || 0;
-          const mcapB = b.yearlyData[b.yearlyData.length - 1]?.marketCapCr || 0;
-          return Math.abs(mcapA - currentMcap) - Math.abs(mcapB - currentMcap);
-        });
-
-      for (const r of remaining) {
-        if (list.length >= 11) break;
-        list.push(r);
-        addedIds.add(r.id);
-      }
     }
 
     // Sort by Market Cap descending
@@ -112,7 +197,7 @@ export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
             <span>Competitors &amp; Peer Comparison: {currentCompany.industry}</span>
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            Benchmarking {currentCompany.name} against {competitors.length - 1} industry peers (Annual PAT, Market Cap &amp; Cash from Operating Profit)
+            Benchmarking {currentCompany.name} against {competitors.length - 1} peers in {currentCompany.sector} (Annual PAT, Market Cap &amp; Cash from Operating Profit)
           </p>
         </div>
 
