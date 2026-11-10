@@ -4,15 +4,16 @@
  */
 
 import React, { useState } from 'react';
-import { IndianCompany } from '../data/indianCompanies';
+import { IndianCompany, resolveOrGenerateCompany } from '../data/indianCompanies';
 import { formatInrCrores, exportToCsv } from '../utils/formatters';
 import { 
   BarChart3, 
   ArrowUpDown, 
   Download, 
-  Search,
-  Check,
-  X
+  Search, 
+  X, 
+  PlusCircle,
+  Building
 } from 'lucide-react';
 
 interface AllCompaniesAnalyticsProps {
@@ -20,6 +21,7 @@ interface AllCompaniesAnalyticsProps {
   onSelectCompany: (id: string) => void;
   selectedCompanyId: string;
   periodType: 'quarterly' | 'yearly';
+  onAddCustomCompany?: (company: IndianCompany) => void;
 }
 
 type SortColumn = 'marketCapCr' | 'patCr' | 'patMarginPct' | 'peRatio';
@@ -30,6 +32,7 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
   onSelectCompany,
   selectedCompanyId,
   periodType,
+  onAddCustomCompany,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSector, setSelectedSector] = useState<string>('All');
@@ -61,10 +64,10 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
 
   const sectors = ['All', ...Array.from(new Set(companies.map(c => c.sector)))];
 
-  // Filter & Sort across ALL companies with market cap > 500 Cr
+  // Real-time multi-token search
   const filteredAndSorted = React.useMemo(() => {
     let list = companyAnalytics.filter(c => {
-      // Must be > 500 Cr
+      // Threshold check
       if (c.marketCapCr < 500) return false;
 
       // Sector filter
@@ -72,14 +75,10 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
 
       // Search term
       if (searchTerm.trim()) {
-        const q = searchTerm.toLowerCase().trim();
-        const match =
-          c.name.toLowerCase().includes(q) ||
-          c.symbol.toLowerCase().includes(q) ||
-          c.bseCode.includes(q) ||
-          c.industry.toLowerCase().includes(q) ||
-          c.sector.toLowerCase().includes(q);
-        if (!match) return false;
+        const tokens = searchTerm.toLowerCase().trim().split(/\s+/);
+        const targetString = `${c.name} ${c.symbol} ${c.bseCode} ${c.industry} ${c.sector}`.toLowerCase();
+        const allTokensMatch = tokens.every(tok => targetString.includes(tok));
+        if (!allTokensMatch) return false;
       }
       return true;
     });
@@ -119,6 +118,16 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
     exportToCsv(`All_Indian_Companies_Above_500Cr_${periodType}.csv`, rows);
   };
 
+  const handleAddCustom = () => {
+    if (!searchTerm.trim()) return;
+    const generated = resolveOrGenerateCompany(searchTerm);
+    if (generated && onAddCustomCompany) {
+      onAddCustomCompany(generated);
+      onSelectCompany(generated.id);
+      setSearchTerm('');
+    }
+  };
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 md:p-6 shadow-xl">
       {/* Header */}
@@ -129,7 +138,8 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
             <span>Aggregate Analysis: All Companies &gt; ₹500 Cr Market Cap</span>
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            Displaying {filteredAndSorted.length} of {companyAnalytics.length} companies with Market Cap &gt; ₹500 Cr ({periodType === 'yearly' ? 'Annual' : 'Quarterly'} Financials)
+            Displaying <strong className="text-white">{filteredAndSorted.length}</strong> of{' '}
+            <strong className="text-white">{companyAnalytics.length}</strong> companies listed on NSE &amp; BSE ({periodType === 'yearly' ? 'Annual' : 'Quarterly'} Data)
           </p>
         </div>
 
@@ -138,20 +148,20 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors shrink-0"
         >
           <Download className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Export CSV</span>
+          <span>Export All ({filteredAndSorted.length}) CSV</span>
         </button>
       </div>
 
-      {/* Search and Sector Filter Controls */}
-      <div className="py-3 border-b border-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+      {/* Search Input and Sector Filter Chips */}
+      <div className="py-3 border-b border-slate-800/60 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
         {/* Search bar */}
-        <div className="relative w-full sm:w-80">
+        <div className="relative w-full md:w-96">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            placeholder="Search all companies by name, ticker, industry..."
+            placeholder="Search by company name, ticker (e.g. ZOMATO, MARUTI, TCS)..."
             className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-8 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
           />
           {searchTerm && (
@@ -164,15 +174,15 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
           )}
         </div>
 
-        {/* Sector quick tabs */}
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+        {/* Sector Quick Tabs */}
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full">
           {sectors.map(sec => (
             <button
               key={sec}
               onClick={() => setSelectedSector(sec)}
               className={`px-2.5 py-1 rounded text-xs whitespace-nowrap transition-colors ${
                 selectedSector === sec
-                  ? 'bg-blue-600 text-white font-medium'
+                  ? 'bg-blue-600 text-white font-medium shadow-sm'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
             >
@@ -182,13 +192,13 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
         </div>
       </div>
 
-      {/* Full Ranking Table */}
-      <div className="overflow-x-auto mt-2 max-h-[480px] overflow-y-auto pr-1">
+      {/* Comprehensive Table */}
+      <div className="overflow-x-auto mt-2 max-h-[520px] overflow-y-auto pr-1">
         <table className="w-full text-left text-xs">
           <thead className="sticky top-0 bg-slate-950 z-10 text-slate-400 border-b border-slate-800 font-medium">
             <tr>
-              <th className="py-3 px-3">Company & Symbol</th>
-              <th className="py-3 px-3">Business Segment</th>
+              <th className="py-3 px-3">Company &amp; Symbol</th>
+              <th className="py-3 px-3">Industry Segment</th>
               <th
                 onClick={() => handleSort('marketCapCr')}
                 className="py-3 px-3 text-right cursor-pointer hover:text-white transition-colors text-blue-300"
@@ -255,7 +265,7 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
                   </td>
 
                   <td className="py-2.5 px-3 font-sans text-slate-400">
-                    <div className="text-slate-300">{c.industry}</div>
+                    <div className="text-slate-300 font-medium">{c.industry}</div>
                     <div className="text-[10px] text-slate-500">{c.category}</div>
                   </td>
 
@@ -286,9 +296,9 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
                   <td className="py-2.5 px-3 text-center font-sans">
                     <button
                       onClick={() => onSelectCompany(c.id)}
-                      className={`px-2.5 py-1 text-xs font-medium rounded transition-all ${
+                      className={`px-3 py-1 text-xs font-medium rounded transition-all ${
                         isSelected
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-blue-600 text-white shadow-sm'
                           : 'text-blue-400 hover:text-white bg-blue-950/80 hover:bg-blue-600 border border-blue-800/80'
                       }`}
                     >
@@ -301,8 +311,20 @@ export const AllCompaniesAnalytics: React.FC<AllCompaniesAnalyticsProps> = ({
 
             {filteredAndSorted.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-xs text-slate-400 font-sans">
-                  No company matching &quot;{searchTerm}&quot; found in &gt; ₹500 Cr universe.
+                <td colSpan={7} className="py-10 text-center text-xs text-slate-400 font-sans">
+                  <div className="max-w-md mx-auto space-y-3">
+                    <Building className="w-8 h-8 text-slate-600 mx-auto" />
+                    <div>No preloaded company matching &quot;{searchTerm}&quot;.</div>
+                    {onAddCustomCompany && searchTerm.trim().length >= 2 && (
+                      <button
+                        onClick={handleAddCustom}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow transition-colors"
+                      >
+                        <PlusCircle className="w-4 h-4" />
+                        <span>Add &amp; Plot &quot;{searchTerm.toUpperCase()}&quot; Financials</span>
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             )}
