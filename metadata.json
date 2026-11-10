@@ -1,0 +1,6 @@
+{
+  "name": "Bharat MarketCap & PAT Analytics",
+  "description": "Interactive quarterly dual-axis visualization and cross-sectional analytics for Indian publicly listed companies with Market Capitalisation above ₹500 Cr, plotting quarterly PAT in green alongside Market Cap in blue.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
