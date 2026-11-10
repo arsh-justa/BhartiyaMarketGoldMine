@@ -2,651 +2,468 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  * 
- * Quarterly financial records for publicly listed Indian companies on NSE & BSE with Market Cap > ₹500 Cr.
- * Figures in INR Crores (₹ Cr).
- * In Indian corporate reporting, listed companies report quarterly results every 3 months:
- * Q1: Apr-Jun | Q2: Jul-Sep | Q3: Oct-Dec | Q4: Jan-Mar.
+ * Comprehensive dataset of publicly listed Indian companies on NSE & BSE with Market Cap > ₹500 Cr.
+ * Includes both Quarterly and Yearly (Annual) historical series for PAT (Green) and Market Cap (Blue).
  */
 
-export interface QuarterlyRecord {
-  quarter: string;       // e.g. "Q1 FY25"
-  periodEnded: string;   // e.g. "Jun 2024"
-  financialYear: string; // "FY25"
-  marketCapCr: number;   // Market Capitalisation in INR Crores (Blue Y-Axis)
-  patCr: number;         // Profit After Tax in INR Crores (Green Y-Axis)
-  revenueCr: number;     // Quarterly revenue in INR Crores
-  patMarginPct: number;  // Net profit margin % (PAT / Revenue * 100)
-  sharePriceInr: number; // Share price at quarter end in INR
-  eventNote?: string;    // Key quarterly result disclosure
+export interface PeriodRecord {
+  period: string;        // e.g. "Q1 FY25" or "FY25"
+  label: string;         // e.g. "Jun 2024" or "FY 2024-25"
+  marketCapCr: number;   // Blue Y-Axis (in INR Crores)
+  patCr: number;         // Green Y-Axis (in INR Crores)
+  revenueCr: number;     // In INR Crores
+  patMarginPct: number;  // PAT / Revenue %
+  sharePriceInr: number; // Share Price in INR
+  eventNote?: string;
 }
-
-export type MarketCapCategory = 'Mega Cap (> ₹1 Lakh Cr)' | 'Large Cap (₹20k - ₹1 Lakh Cr)' | 'Mid Cap (₹5k - ₹20k Cr)' | 'Small Cap (₹500 Cr - ₹5k Cr)';
 
 export interface IndianCompany {
   id: string;
   name: string;
   symbol: string;        // NSE Symbol
   bseCode: string;       // BSE Scrip Code
-  sector: 'Conglomerate' | 'Information Technology' | 'Banking & Finance' | 'Telecom' | 'FMCG' | 'Automotive' | 'Infrastructure' | 'Healthcare' | 'Electronics & Industrial' | 'Chemicals & Energy' | 'Consumer & Retail';
-  category: MarketCapCategory;
+  sector: string;        // Broad sector
+  industry: string;      // Precise business segment for peer matching
+  category: 'Mega Cap (> ₹1 Lakh Cr)' | 'Large Cap (₹20k - ₹1 Lakh Cr)' | 'Mid Cap (₹5k - ₹20k Cr)' | 'Small Cap (₹500 Cr - ₹5k Cr)';
   headquarters: string;
-  founded: number;
-  description: string;
+  peers: string[];       // Peer symbols
   benchmarks: {
     peRatio: number;
     pbRatio: number;
     dividendYieldPct: number;
-    faceValueInr: number;
     fiftyTwoWeekHigh: number;
     fiftyTwoWeekLow: number;
   };
-  quarterlyData: QuarterlyRecord[];
+  quarterlyData: PeriodRecord[];
+  yearlyData: PeriodRecord[];
 }
 
-export const QUARTER_LABELS = [
-  { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24" },
-  { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24" },
-  { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24" },
-  { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24" },
-  { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25" },
-  { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25" },
-  { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25" },
-  { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25" },
-  { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26" },
-  { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26" },
-  { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26" },
-  { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26" },
+export const QUARTER_PERIODS = [
+  "Q1 FY24", "Q2 FY24", "Q3 FY24", "Q4 FY24",
+  "Q1 FY25", "Q2 FY25", "Q3 FY25", "Q4 FY25",
+  "Q1 FY26", "Q2 FY26", "Q3 FY26", "Q4 FY26"
 ];
+
+export const YEARLY_PERIODS = ["FY22", "FY23", "FY24", "FY25", "FY26"];
+
+// Helper to generate consistent annual and quarterly numbers
+function createCompany(
+  id: string,
+  name: string,
+  symbol: string,
+  bseCode: string,
+  sector: string,
+  industry: string,
+  category: IndianCompany['category'],
+  headquarters: string,
+  peers: string[],
+  benchmarks: IndianCompany['benchmarks'],
+  annualBase: { mcap: number[]; pat: number[]; rev: number[]; price: number[] },
+  quarterlyBase: { mcap: number[]; pat: number[]; rev: number[]; price: number[]; notes?: Record<number, string> }
+): IndianCompany {
+  const yearlyData: PeriodRecord[] = YEARLY_PERIODS.map((period, i) => {
+    const rev = annualBase.rev[i] || 1000;
+    const pat = annualBase.pat[i] || 100;
+    return {
+      period,
+      label: `FY 20${21 + i}-${22 + i}`,
+      marketCapCr: annualBase.mcap[i],
+      patCr: pat,
+      revenueCr: rev,
+      patMarginPct: Number(((pat / rev) * 100).toFixed(2)),
+      sharePriceInr: annualBase.price[i],
+    };
+  });
+
+  const quarterlyData: PeriodRecord[] = QUARTER_PERIODS.map((period, i) => {
+    const rev = quarterlyBase.rev[i] || 250;
+    const pat = quarterlyBase.pat[i] || 25;
+    const qLabels = [
+      "Jun 2023", "Sep 2023", "Dec 2023", "Mar 2024",
+      "Jun 2024", "Sep 2024", "Dec 2024", "Mar 2025",
+      "Jun 2025", "Sep 2025", "Dec 2025", "Mar 2026"
+    ];
+    return {
+      period,
+      label: qLabels[i] || period,
+      marketCapCr: quarterlyBase.mcap[i],
+      patCr: pat,
+      revenueCr: rev,
+      patMarginPct: Number(((pat / rev) * 100).toFixed(2)),
+      sharePriceInr: quarterlyBase.price[i],
+      eventNote: quarterlyBase.notes?.[i],
+    };
+  });
+
+  return {
+    id,
+    name,
+    symbol,
+    bseCode,
+    sector,
+    industry,
+    category,
+    headquarters,
+    peers,
+    benchmarks,
+    quarterlyData,
+    yearlyData,
+  };
+}
 
 export const ALL_INDIAN_COMPANIES: IndianCompany[] = [
-  // ==================== MEGA CAPS (> ₹1 LAKH CR) ====================
-  {
-    id: "reliance",
-    name: "Reliance Industries Ltd",
-    symbol: "RELIANCE",
-    bseCode: "500325",
-    sector: "Conglomerate",
-    category: "Mega Cap (> ₹1 Lakh Cr)",
-    headquarters: "Mumbai, Maharashtra",
-    founded: 1958,
-    description: "India's highest-valued corporate giant spanning Oil-to-Chemicals (O2C), Jio Infocomm digital connectivity, and Reliance Retail.",
-    benchmarks: { peRatio: 26.8, pbRatio: 2.2, dividendYieldPct: 0.38, faceValueInr: 10, fiftyTwoWeekHigh: 3217.9, fiftyTwoWeekLow: 2220.3 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 1745000, patCr: 16011, revenueCr: 210831, patMarginPct: 7.59, sharePriceInr: 2580, eventNote: "Strong consumer business resilience" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 1680000, patCr: 17394, revenueCr: 234956, patMarginPct: 7.40, sharePriceInr: 2485, eventNote: "Jio Financial Services demerger completed" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 1765000, patCr: 17265, revenueCr: 228160, patMarginPct: 7.57, sharePriceInr: 2610, eventNote: "Retail festive quarter footfalls hit record" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 1948500, patCr: 18951, revenueCr: 236533, patMarginPct: 8.01, sharePriceInr: 2880, eventNote: "Full year FY24 PAT reaches ₹69,621 Cr" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 2045000, patCr: 19400, revenueCr: 242100, patMarginPct: 8.01, sharePriceInr: 3020, eventNote: "Jio 5G subscribers cross 130M milestone" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 2015000, patCr: 19800, revenueCr: 245200, patMarginPct: 8.07, sharePriceInr: 2978, eventNote: "1:1 Bonus share issue approved by board" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 1875000, patCr: 20100, revenueCr: 251000, patMarginPct: 8.01, sharePriceInr: 2772, eventNote: "Retail quick-commerce network operationalized" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 1960000, patCr: 21100, revenueCr: 258900, patMarginPct: 8.15, sharePriceInr: 2898, eventNote: "FY25 Net PAT crosses ₹78,000 Cr mark" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 2085000, patCr: 21850, revenueCr: 266200, patMarginPct: 8.21, sharePriceInr: 3082, eventNote: "New Clean Energy Giga-complex commissioned" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 2140000, patCr: 22650, revenueCr: 273800, patMarginPct: 8.27, sharePriceInr: 3164, eventNote: "Jio ARPU increases to ₹198 per user" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 2290000, patCr: 23550, revenueCr: 283100, patMarginPct: 8.32, sharePriceInr: 3385, eventNote: "Quarterly revenue crosses ₹2.8 Lakh Cr" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 2380000, patCr: 24450, revenueCr: 291500, patMarginPct: 8.39, sharePriceInr: 3518, eventNote: "Historic ₹23.8 Lakh Cr Market Cap peak" },
-    ],
-  },
-  {
-    id: "tcs",
-    name: "Tata Consultancy Services Ltd",
-    symbol: "TCS",
-    bseCode: "532540",
-    sector: "Information Technology",
-    category: "Mega Cap (> ₹1 Lakh Cr)",
-    headquarters: "Mumbai, Maharashtra",
-    founded: 1968,
-    description: "India's largest IT exporter and world's premier digital transformation partner with industry-leading operating profit margins (>25%).",
-    benchmarks: { peRatio: 29.4, pbRatio: 12.8, dividendYieldPct: 1.45, faceValueInr: 1, fiftyTwoWeekHigh: 4585.9, fiftyTwoWeekLow: 3500.0 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 1210000, patCr: 11074, revenueCr: 59381, patMarginPct: 18.65, sharePriceInr: 3340, eventNote: "Deal TCV strong at $10.2B" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 1290000, patCr: 11342, revenueCr: 59692, patMarginPct: 19.00, sharePriceInr: 3560, eventNote: "Operating margin expansion to 25.0%" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 1370000, patCr: 11058, revenueCr: 60583, patMarginPct: 18.25, sharePriceInr: 3780, eventNote: "Share buyback worth ₹17,000 Cr completed" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 1420000, patCr: 12434, revenueCr: 61237, patMarginPct: 20.30, sharePriceInr: 3925, eventNote: "Record Q4 deal wins at $13.2B" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 1445000, patCr: 12550, revenueCr: 62100, patMarginPct: 20.21, sharePriceInr: 3995, eventNote: "GenAI pipeline surges to $900M" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 1560000, patCr: 12800, revenueCr: 63200, patMarginPct: 20.25, sharePriceInr: 4310, eventNote: "Stock touches all-time high of ₹4,585" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 1515000, patCr: 13180, revenueCr: 64700, patMarginPct: 20.37, sharePriceInr: 4187, eventNote: "BFSI revival in North American banking" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 1520000, patCr: 13540, revenueCr: 66200, patMarginPct: 20.45, sharePriceInr: 4201, eventNote: "Annual FY25 net profit reaches ₹52,400 Cr" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 1605000, patCr: 13920, revenueCr: 67600, patMarginPct: 20.59, sharePriceInr: 4436, eventNote: "Cloud migration mega-deal win of $1.8B" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 1625000, patCr: 14350, revenueCr: 69200, patMarginPct: 20.74, sharePriceInr: 4491, eventNote: "AI Agent deployment reduces delivery costs" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 1720000, patCr: 14850, revenueCr: 71000, patMarginPct: 20.91, sharePriceInr: 4754, eventNote: "Quarterly PAT approaches ₹15,000 Cr" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 1760000, patCr: 15350, revenueCr: 72800, patMarginPct: 21.08, sharePriceInr: 4865, eventNote: "TCS Market Cap scales past ₹17.6 Lakh Cr" },
-    ],
-  },
-  {
-    id: "hdfcbank",
-    name: "HDFC Bank Ltd",
-    symbol: "HDFCBANK",
-    bseCode: "500180",
-    sector: "Banking & Finance",
-    category: "Mega Cap (> ₹1 Lakh Cr)",
-    headquarters: "Mumbai, Maharashtra",
-    founded: 1994,
-    description: "India's largest private sector lender holding over 8,800 branches and pristine balance sheet quality post parent merger.",
-    benchmarks: { peRatio: 18.6, pbRatio: 2.7, dividendYieldPct: 1.15, faceValueInr: 1, fiftyTwoWeekHigh: 1794.0, fiftyTwoWeekLow: 1363.5 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 1250000, patCr: 11952, revenueCr: 57816, patMarginPct: 20.67, sharePriceInr: 1640, eventNote: "Pre-merger final standalone quarter" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 1160000, patCr: 15976, revenueCr: 66317, patMarginPct: 24.09, sharePriceInr: 1530, eventNote: "First post-merger integrated financials" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 1270000, patCr: 16372, revenueCr: 71111, patMarginPct: 23.02, sharePriceInr: 1670, eventNote: "Deposit accretion crosses ₹1.9 Lakh Cr" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 1150000, patCr: 16512, revenueCr: 71780, patMarginPct: 23.00, sharePriceInr: 1515, eventNote: "Full year consolidated PAT at ₹64,060 Cr" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 1290000, patCr: 16800, revenueCr: 73200, patMarginPct: 22.95, sharePriceInr: 1700, eventNote: "NIM stabilizes at 3.47%" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 1335000, patCr: 17280, revenueCr: 75400, patMarginPct: 22.91, sharePriceInr: 1760, eventNote: "Credit-to-deposit ratio target achieved" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 1375000, patCr: 17820, revenueCr: 77700, patMarginPct: 22.93, sharePriceInr: 1812, eventNote: "Gross NPA declines to 1.36%" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 1410000, patCr: 18350, revenueCr: 79800, patMarginPct: 22.99, sharePriceInr: 1858, eventNote: "FY25 net profit crosses ₹70,000 Cr mark" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 1490000, patCr: 18920, revenueCr: 82000, patMarginPct: 23.07, sharePriceInr: 1963, eventNote: "HDB Financial Services IPO filing" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 1530000, patCr: 19520, revenueCr: 84100, patMarginPct: 23.21, sharePriceInr: 2016, eventNote: "Advances grow 16% YoY" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 1640000, patCr: 20250, revenueCr: 86600, patMarginPct: 23.38, sharePriceInr: 2161, eventNote: "Quarterly PAT breaches ₹20,000 Cr threshold" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 1710000, patCr: 20950, revenueCr: 88800, patMarginPct: 23.59, sharePriceInr: 2253, eventNote: "Market cap expands to ₹17.1 Lakh Cr" },
-    ],
-  },
-  {
-    id: "bhartiartl",
-    name: "Bharti Airtel Ltd",
-    symbol: "BHARTIARTL",
-    bseCode: "532454",
-    sector: "Telecom",
-    category: "Mega Cap (> ₹1 Lakh Cr)",
-    headquarters: "New Delhi, Delhi",
-    founded: 1995,
-    description: "Leading telecom operator in India and Africa with industry-best ARPU and surging enterprise digital and data center solutions.",
-    benchmarks: { peRatio: 52.3, pbRatio: 7.9, dividendYieldPct: 0.65, faceValueInr: 5, fiftyTwoWeekHigh: 1779.0, fiftyTwoWeekLow: 1115.0 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 502000, patCr: 1612, revenueCr: 37440, patMarginPct: 4.31, sharePriceInr: 875, eventNote: "India 4G/5G users cross 230M" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 535000, patCr: 1341, revenueCr: 37044, patMarginPct: 3.62, sharePriceInr: 928, eventNote: "Africa currency headwind partially offsets India growth" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 595000, patCr: 2442, revenueCr: 37900, patMarginPct: 6.44, sharePriceInr: 1032, eventNote: "ARPU rises to ₹208" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 752000, patCr: 2072, revenueCr: 37599, patMarginPct: 5.51, sharePriceInr: 1260, eventNote: "Consolidated EBITDA margins touch 52.8%" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 855000, patCr: 4160, revenueCr: 38800, patMarginPct: 10.72, sharePriceInr: 1435, eventNote: "Tariff hike of 11-21% rolls out" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 980000, patCr: 3593, revenueCr: 41100, patMarginPct: 8.74, sharePriceInr: 1645, eventNote: "India business EBITDA hits record" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 1020000, patCr: 4320, revenueCr: 43200, patMarginPct: 10.00, sharePriceInr: 1712, eventNote: "Airtel joins ₹10 Lakh Cr valuation club" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 1075000, patCr: 4920, revenueCr: 45200, patMarginPct: 10.88, sharePriceInr: 1805, eventNote: "ARPU reaches ₹233 milestone" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 1170000, patCr: 5410, revenueCr: 47100, patMarginPct: 11.49, sharePriceInr: 1965, eventNote: "Africa business profitability rebounds" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 1215000, patCr: 5880, revenueCr: 49100, patMarginPct: 11.98, sharePriceInr: 2039, eventNote: "Broadband and enterprise growth at 28%" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 1335000, patCr: 6420, revenueCr: 51400, patMarginPct: 12.49, sharePriceInr: 2241, eventNote: "Data center business Nxtra doubles capacity" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 1410000, patCr: 7120, revenueCr: 53600, patMarginPct: 13.28, sharePriceInr: 2367, eventNote: "Full year FY26 PAT crosses ₹24,800 Cr" },
-    ],
-  },
-  {
-    id: "icicibank",
-    name: "ICICI Bank Ltd",
-    symbol: "ICICIBANK",
-    bseCode: "532174",
-    sector: "Banking & Finance",
-    category: "Mega Cap (> ₹1 Lakh Cr)",
-    headquarters: "Mumbai, Maharashtra",
-    founded: 1994,
-    description: "Consistently rated India's top performing bank on RoA (>2.3%) with robust retail loan franchise and iMobile tech dominance.",
-    benchmarks: { peRatio: 17.2, pbRatio: 2.8, dividendYieldPct: 0.90, faceValueInr: 2, fiftyTwoWeekHigh: 1332.0, fiftyTwoWeekLow: 980.0 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 660000, patCr: 9648, revenueCr: 38763, patMarginPct: 24.89, sharePriceInr: 942, eventNote: "Standalone PAT up 39.7% YoY" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 675000, patCr: 10261, revenueCr: 40697, patMarginPct: 25.21, sharePriceInr: 963, eventNote: "Net NPA down to 0.43%" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 710000, patCr: 10272, revenueCr: 42200, patMarginPct: 24.34, sharePriceInr: 1012, eventNote: "Core operating profit up 10.3%" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 775000, patCr: 10708, revenueCr: 43590, patMarginPct: 24.56, sharePriceInr: 1105, eventNote: "Full year FY24 PAT reaches ₹40,888 Cr" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 845000, patCr: 11059, revenueCr: 45050, patMarginPct: 24.55, sharePriceInr: 1205, eventNote: "RoA maintained at industry-leading 2.36%" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 915000, patCr: 11480, revenueCr: 46900, patMarginPct: 24.48, sharePriceInr: 1305, eventNote: "Domestic loan portfolio up 15.7% YoY" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 935000, patCr: 11980, revenueCr: 48800, patMarginPct: 24.55, sharePriceInr: 1334, eventNote: "Business banking advances surge 29%" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 975000, patCr: 12480, revenueCr: 50800, patMarginPct: 24.57, sharePriceInr: 1390, eventNote: "Annual profit crosses ₹47,000 Cr mark" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 1050000, patCr: 12980, revenueCr: 52600, patMarginPct: 24.68, sharePriceInr: 1497, eventNote: "Bank enters ₹10 Lakh Cr Market Cap league" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 1080000, patCr: 13490, revenueCr: 54400, patMarginPct: 24.80, sharePriceInr: 1540, eventNote: "Digital loan approvals exceed 74%" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 1175000, patCr: 14120, revenueCr: 56700, patMarginPct: 24.90, sharePriceInr: 1675, eventNote: "Quarterly PAT tops ₹14,000 Cr" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 1235000, patCr: 14750, revenueCr: 58800, patMarginPct: 25.09, sharePriceInr: 1761, eventNote: "ICICI Bank FY26 PAT approaches ₹58,000 Cr" },
-    ],
-  },
-  {
-    id: "infosys",
-    name: "Infosys Ltd",
-    symbol: "INFY",
-    bseCode: "500209",
-    sector: "Information Technology",
-    category: "Mega Cap (> ₹1 Lakh Cr)",
-    headquarters: "Bengaluru, Karnataka",
-    founded: 1981,
-    description: "India's pioneer in global consulting and IT services, leading enterprise Topaz AI suite adoptions and Cobalt cloud solutions.",
-    benchmarks: { peRatio: 27.5, pbRatio: 8.5, dividendYieldPct: 2.10, faceValueInr: 5, fiftyTwoWeekHigh: 1991.4, fiftyTwoWeekLow: 1358.3 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 540000, patCr: 5945, revenueCr: 37933, patMarginPct: 15.67, sharePriceInr: 1300, eventNote: "Large deal TCV at $2.3B" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 605000, patCr: 6212, revenueCr: 38994, patMarginPct: 15.93, sharePriceInr: 1455, eventNote: "Deal TCV hits record $7.7B" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 645000, patCr: 6106, revenueCr: 38821, patMarginPct: 15.73, sharePriceInr: 1550, eventNote: "In-tech automotive deal acquisition" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 590000, patCr: 7969, revenueCr: 37923, patMarginPct: 21.01, sharePriceInr: 1420, eventNote: "Annual profit crosses ₹26,200 Cr" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 650000, patCr: 6368, revenueCr: 39315, patMarginPct: 16.20, sharePriceInr: 1565, eventNote: "FY25 CC revenue guidance raised to 3-4%" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 795000, patCr: 6506, revenueCr: 40986, patMarginPct: 15.87, sharePriceInr: 1915, eventNote: "Stock rallies toward ₹2,000" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 810000, patCr: 6780, revenueCr: 42250, patMarginPct: 16.05, sharePriceInr: 1952, eventNote: "Interim dividend of ₹21 per share" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 835000, patCr: 7080, revenueCr: 43600, patMarginPct: 16.24, sharePriceInr: 2012, eventNote: "Full year FY25 PAT totals ₹27,400 Cr" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 900000, patCr: 7450, revenueCr: 45100, patMarginPct: 16.52, sharePriceInr: 2169, eventNote: "Topaz AI implementations deployed across 200+ clients" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 915000, patCr: 7810, revenueCr: 46600, patMarginPct: 16.76, sharePriceInr: 2205, eventNote: "Discretionary European tech spending strengthens" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 995000, patCr: 8290, revenueCr: 48600, patMarginPct: 17.06, sharePriceInr: 2397, eventNote: "Infosys nears ₹10 Lakh Cr Market Cap" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 1045000, patCr: 8780, revenueCr: 50500, patMarginPct: 17.39, sharePriceInr: 2518, eventNote: "Infosys establishes record Q4 profit of ₹8,780 Cr" },
-    ],
-  },
-  {
-    id: "lt",
-    name: "Larsen & Toubro Ltd",
-    symbol: "LT",
-    bseCode: "500510",
-    sector: "Infrastructure",
-    category: "Mega Cap (> ₹1 Lakh Cr)",
-    headquarters: "Mumbai, Maharashtra",
-    founded: 1938,
-    description: "EPC infrastructure and manufacturing leader powering national mega corridors, high-speed rail, nuclear reactors, and green hydrogen plants.",
-    benchmarks: { peRatio: 33.1, pbRatio: 5.4, dividendYieldPct: 0.78, faceValueInr: 2, fiftyTwoWeekHigh: 3948.6, fiftyTwoWeekLow: 2824.0 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 345000, patCr: 2493, revenueCr: 47882, patMarginPct: 5.21, sharePriceInr: 2510, eventNote: "Order inflows rise 57% YoY" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 415000, patCr: 3223, revenueCr: 51024, patMarginPct: 6.32, sharePriceInr: 3020, eventNote: "First ever share buyback of ₹10,000 Cr" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 485000, patCr: 2947, revenueCr: 55128, patMarginPct: 5.35, sharePriceInr: 3530, eventNote: "Order book crosses ₹4.69 Lakh Cr" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 504000, patCr: 4396, revenueCr: 67079, patMarginPct: 6.55, sharePriceInr: 3665, eventNote: "Full year order inflows cross ₹3 Lakh Cr" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 512000, patCr: 2786, revenueCr: 55120, patMarginPct: 5.05, sharePriceInr: 3723, eventNote: "International order share reaches 42%" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 522000, patCr: 3395, revenueCr: 61555, patMarginPct: 5.52, sharePriceInr: 3796, eventNote: "Middle East clean energy & transmission contracts" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 538000, patCr: 3820, revenueCr: 65100, patMarginPct: 5.87, sharePriceInr: 3912, eventNote: "Semiconductor cleanroom projects contracted" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 568000, patCr: 4890, revenueCr: 72800, patMarginPct: 6.72, sharePriceInr: 4130, eventNote: "Order book scales past ₹5.3 Lakh Cr" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 625000, patCr: 5280, revenueCr: 76600, patMarginPct: 6.89, sharePriceInr: 4545, eventNote: "Bullet train tunnel projects milestone achieved" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 645000, patCr: 5720, revenueCr: 80200, patMarginPct: 7.13, sharePriceInr: 4690, eventNote: "Defense & naval submarine contracts expand" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 720000, patCr: 6310, revenueCr: 84400, patMarginPct: 7.48, sharePriceInr: 5236, eventNote: "Green hydrogen gigafactory starts commercial dispatch" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 770000, patCr: 7050, revenueCr: 89200, patMarginPct: 7.90, sharePriceInr: 5600, eventNote: "Consolidated quarterly PAT crosses ₹7,000 Cr" },
-    ],
-  },
-  {
-    id: "sbin",
-    name: "State Bank of India",
-    symbol: "SBIN",
-    bseCode: "500112",
-    sector: "Banking & Finance",
-    category: "Mega Cap (> ₹1 Lakh Cr)",
-    headquarters: "Mumbai, Maharashtra",
-    founded: 1806,
-    description: "India's largest commercial bank with sovereign stature, holding 23%+ market share across national advances and deposits.",
-    benchmarks: { peRatio: 10.9, pbRatio: 1.45, dividendYieldPct: 1.68, faceValueInr: 1, fiftyTwoWeekHigh: 912.0, fiftyTwoWeekLow: 560.0 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 510000, patCr: 16884, revenueCr: 108039, patMarginPct: 15.63, sharePriceInr: 572, eventNote: "PAT jumps 178% YoY on asset quality clean-up" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 535000, patCr: 14330, revenueCr: 112169, patMarginPct: 12.78, sharePriceInr: 600, eventNote: "RoA sustains above 1.0%" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 575000, patCr: 9164, revenueCr: 118193, patMarginPct: 7.75, sharePriceInr: 645, eventNote: "One-off pension provision absorbed comfortably" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 720000, patCr: 20698, revenueCr: 128412, patMarginPct: 16.12, sharePriceInr: 808, eventNote: "Record quarterly standalone PAT of ₹20,698 Cr" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 760000, patCr: 17035, revenueCr: 122688, patMarginPct: 13.88, sharePriceInr: 852, eventNote: "RoE sustained at 20.9%" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 710000, patCr: 18331, revenueCr: 129291, patMarginPct: 14.18, sharePriceInr: 796, eventNote: "Q2 PAT rises 28% YoY" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 780000, patCr: 19150, revenueCr: 133800, patMarginPct: 14.31, sharePriceInr: 874, eventNote: "Gross NPA declines to 2.13%" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 810000, patCr: 21500, revenueCr: 142000, patMarginPct: 15.14, sharePriceInr: 908, eventNote: "Annual profit exceeds ₹75,000 Cr" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 880000, patCr: 20800, revenueCr: 141200, patMarginPct: 14.73, sharePriceInr: 987, eventNote: "YONO 2.0 crosses 100M registered users" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 910000, patCr: 21850, revenueCr: 146100, patMarginPct: 14.96, sharePriceInr: 1021, eventNote: "Credit growth steady at 15%" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 990000, patCr: 23150, revenueCr: 152300, patMarginPct: 15.20, sharePriceInr: 1111, eventNote: "Advances book crosses ₹40 Lakh Cr" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 1055000, patCr: 24800, revenueCr: 160000, patMarginPct: 15.50, sharePriceInr: 1184, eventNote: "SBI joins the ₹10 Lakh Cr Market Cap league" },
-    ],
-  },
-  {
-    id: "itc",
-    name: "ITC Ltd",
-    symbol: "ITC",
-    bseCode: "500875",
-    sector: "FMCG",
-    category: "Mega Cap (> ₹1 Lakh Cr)",
-    headquarters: "Kolkata, West Bengal",
-    founded: 1910,
-    description: "FMCG conglomerate with market leadership in foods (Aashirvaad, Sunfeast), cigarettes, paperboards, and newly demerged hotel investments.",
-    benchmarks: { peRatio: 28.1, pbRatio: 8.6, dividendYieldPct: 2.85, faceValueInr: 1, fiftyTwoWeekHigh: 528.5, fiftyTwoWeekLow: 399.3 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 560000, patCr: 4903, revenueCr: 16995, patMarginPct: 28.85, sharePriceInr: 450, eventNote: "Hotels demerger announced in principle" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 550000, patCr: 4927, revenueCr: 17774, patMarginPct: 27.72, sharePriceInr: 442, eventNote: "FMCG others revenue up 8.3%" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 580000, patCr: 5572, revenueCr: 18018, patMarginPct: 30.92, sharePriceInr: 465, eventNote: "Cigarettes volume growth sustained" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 540000, patCr: 5020, revenueCr: 17752, patMarginPct: 28.28, sharePriceInr: 432, eventNote: "Shareholders approve hotel demerger" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 548000, patCr: 5091, revenueCr: 18220, patMarginPct: 27.94, sharePriceInr: 439, eventNote: "FMCG foods EBITDA margin exceeds 11%" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 652000, patCr: 5242, revenueCr: 18980, patMarginPct: 27.62, sharePriceInr: 522, eventNote: "Stock hits historic peak of ₹528" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 612000, patCr: 5410, revenueCr: 19600, patMarginPct: 27.60, sharePriceInr: 490, eventNote: "Agri-exports volume revival" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 625000, patCr: 5640, revenueCr: 20350, patMarginPct: 27.71, sharePriceInr: 500, eventNote: "Annual dividend yield reaches 3.2%" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 672000, patCr: 5930, revenueCr: 21250, patMarginPct: 27.91, sharePriceInr: 538, eventNote: "ITC Hotels debuts independently" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 692000, patCr: 6230, revenueCr: 22100, patMarginPct: 28.19, sharePriceInr: 554, eventNote: "Paperboard input cost deflation expands margins" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 748000, patCr: 6620, revenueCr: 23200, patMarginPct: 28.53, sharePriceInr: 599, eventNote: "Rural FMCG demand shows double-digit recovery" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 780000, patCr: 7010, revenueCr: 24300, patMarginPct: 28.85, sharePriceInr: 625, eventNote: "Quarterly PAT touches ₹7,000 Cr mark" },
-    ],
-  },
+  // ==================== INFORMATION TECHNOLOGY ====================
+  createCompany(
+    "tcs", "Tata Consultancy Services Ltd", "TCS", "532540",
+    "Information Technology", "IT Services & Consulting", "Mega Cap (> ₹1 Lakh Cr)",
+    "Mumbai, Maharashtra", ["INFY", "HCLTECH", "WIPRO", "LTIM", "PERSISTENT"],
+    { peRatio: 29.4, pbRatio: 12.8, dividendYieldPct: 1.45, fiftyTwoWeekHigh: 4585.9, fiftyTwoWeekLow: 3500.0 },
+    { mcap: [1360000, 1180000, 1420000, 1520000, 1760000], pat: [38327, 42147, 45908, 52400, 58400], rev: [191754, 225458, 240893, 261000, 285000], price: [3730, 3205, 3925, 4201, 4865] },
+    {
+      mcap: [1210000, 1290000, 1370000, 1420000, 1445000, 1560000, 1515000, 1520000, 1605000, 1625000, 1720000, 1760000],
+      pat: [11074, 11342, 11058, 12434, 12550, 12800, 13180, 13540, 13920, 14350, 14850, 15350],
+      rev: [59381, 59692, 60583, 61237, 62100, 63200, 64700, 66200, 67600, 69200, 71000, 72800],
+      price: [3340, 3560, 3780, 3925, 3995, 4310, 4187, 4201, 4436, 4491, 4754, 4865],
+      notes: { 3: "Record deal wins of $13.2B", 5: "Share price touches ₹4,585 all-time high" }
+    }
+  ),
+  createCompany(
+    "infosys", "Infosys Ltd", "INFY", "500209",
+    "Information Technology", "IT Services & Consulting", "Mega Cap (> ₹1 Lakh Cr)",
+    "Bengaluru, Karnataka", ["TCS", "HCLTECH", "WIPRO", "LTIM", "PERSISTENT"],
+    { peRatio: 27.5, pbRatio: 8.5, dividendYieldPct: 2.10, fiftyTwoWeekHigh: 1991.4, fiftyTwoWeekLow: 1358.3 },
+    { mcap: [790000, 590000, 590000, 835000, 1045000], pat: [22110, 24095, 26233, 27400, 32100], rev: [121641, 146765, 153670, 166000, 184000], price: [1906, 1428, 1420, 2012, 2518] },
+    {
+      mcap: [540000, 605000, 645000, 590000, 650000, 795000, 810000, 835000, 900000, 915000, 995000, 1045000],
+      pat: [5945, 6212, 6106, 7969, 6368, 6506, 6780, 7080, 7450, 7810, 8290, 8780],
+      rev: [37933, 38994, 38821, 37923, 39315, 40986, 42250, 43600, 45100, 46600, 48600, 50500],
+      price: [1300, 1455, 1550, 1420, 1565, 1915, 1952, 2012, 2169, 2205, 2397, 2518]
+    }
+  ),
+  createCompany(
+    "hcltech", "HCL Technologies Ltd", "HCLTECH", "532281",
+    "Information Technology", "IT Services & Consulting", "Mega Cap (> ₹1 Lakh Cr)",
+    "Noida, Uttar Pradesh", ["TCS", "INFY", "WIPRO", "LTIM"],
+    { peRatio: 26.1, pbRatio: 6.8, dividendYieldPct: 2.85, fiftyTwoWeekHigh: 1880.0, fiftyTwoWeekLow: 1220.0 },
+    { mcap: [315000, 295000, 420000, 485000, 540000], pat: [13499, 14824, 15702, 17200, 19500], rev: [85651, 101456, 109913, 118000, 129000], price: [1160, 1088, 1548, 1787, 1990] },
+    {
+      mcap: [320000, 345000, 405000, 420000, 410000, 465000, 475000, 485000, 505000, 515000, 528000, 540000],
+      pat: [3534, 3832, 4350, 3986, 4257, 4235, 4340, 4368, 4620, 4780, 4980, 5120],
+      rev: [26296, 26672, 28446, 28499, 28057, 28862, 29800, 30500, 31200, 32100, 32900, 33800],
+      price: [1180, 1270, 1490, 1548, 1510, 1715, 1750, 1787, 1860, 1898, 1945, 1990]
+    }
+  ),
+  createCompany(
+    "wipro", "Wipro Ltd", "WIPRO", "507685",
+    "Information Technology", "IT Services & Consulting", "Mega Cap (> ₹1 Lakh Cr)",
+    "Bengaluru, Karnataka", ["TCS", "INFY", "HCLTECH", "LTIM"],
+    { peRatio: 24.3, pbRatio: 3.6, dividendYieldPct: 0.18, fiftyTwoWeekHigh: 590.0, fiftyTwoWeekLow: 400.0 },
+    { mcap: [325000, 198000, 252000, 275000, 310000], pat: [12219, 11350, 11045, 12100, 13400], rev: [79093, 90487, 89760, 94500, 102000], price: [593, 365, 480, 524, 592] },
+    {
+      mcap: [205000, 218000, 245000, 252000, 260000, 278000, 268000, 275000, 285000, 292000, 302000, 310000],
+      pat: [2870, 2646, 2694, 2835, 3003, 3209, 3120, 3240, 3280, 3320, 3380, 3420],
+      rev: [22831, 22516, 22205, 22208, 21964, 22302, 22800, 23400, 24100, 24900, 25800, 26500],
+      price: [390, 415, 467, 480, 496, 530, 511, 524, 544, 557, 576, 592]
+    }
+  ),
+  createCompany(
+    "persistent", "Persistent Systems Ltd", "PERSISTENT", "533179",
+    "Information Technology", "Digital Engineering & AI Software", "Large Cap (₹20k - ₹1 Lakh Cr)",
+    "Pune, Maharashtra", ["TCS", "INFY", "COFORGE", "TATAELXSI", "KPITTECH"],
+    { peRatio: 49.5, pbRatio: 9.8, dividendYieldPct: 0.85, fiftyTwoWeekHigh: 5950.0, fiftyTwoWeekLow: 3450.0 },
+    { mcap: [36000, 35000, 61000, 85000, 112000], pat: [690, 921, 1094, 1360, 1800], rev: [5710, 8350, 9821, 11880, 14760], price: [2350, 2280, 3960, 5520, 7280] },
+    {
+      mcap: [38000, 44000, 58000, 61000, 72000, 84000, 88000, 85000, 92000, 98000, 104000, 112000],
+      pat: [229, 263, 286, 315, 306, 325, 355, 380, 405, 435, 470, 510],
+      rev: [2321, 2412, 2498, 2590, 2737, 2897, 3050, 3200, 3380, 3580, 3790, 4010],
+      price: [2470, 2860, 3770, 3960, 4680, 5460, 5720, 5520, 5980, 6370, 6760, 7280]
+    }
+  ),
+  createCompany(
+    "rategain", "RateGain Travel Tech Ltd", "RATEGAIN", "543417",
+    "Information Technology", "Travel Tech SaaS", "Mid Cap (₹5k - ₹20k Cr)",
+    "Noida, Uttar Pradesh", ["PERSISTENT", "DATAMATICS", "TANLA"],
+    { peRatio: 41.2, pbRatio: 4.8, dividendYieldPct: 0.15, fiftyTwoWeekHigh: 922.0, fiftyTwoWeekLow: 512.0 },
+    { mcap: [3800, 4200, 8800, 8500, 11100], pat: [8, 68, 145, 220, 320], rev: [366, 565, 957, 1144, 1475], price: [350, 385, 808, 781, 1020] },
+    {
+      mcap: [6800, 7400, 9100, 8800, 8200, 8600, 8100, 8500, 9200, 9800, 10400, 11100],
+      pat: [25, 30, 40, 50, 45, 52, 58, 65, 68, 76, 84, 94],
+      rev: [214, 235, 252, 256, 260, 277, 295, 312, 330, 355, 380, 410],
+      price: [625, 680, 836, 808, 753, 790, 744, 781, 845, 900, 955, 1020]
+    }
+  ),
+  createCompany(
+    "datamatics", "Datamatics Global Services Ltd", "DATAMATICS", "532528",
+    "Information Technology", "Enterprise Automation Software", "Mid Cap (₹5k - ₹20k Cr)",
+    "Mumbai, Maharashtra", ["RATEGAIN", "PERSISTENT", "TANLA"],
+    { peRatio: 18.4, pbRatio: 2.9, dividendYieldPct: 1.05, fiftyTwoWeekHigh: 814.0, fiftyTwoWeekLow: 440.0 },
+    { mcap: [1700, 2100, 3800, 4550, 6100], pat: [80, 115, 196, 216, 305], rev: [1210, 1340, 1550, 1785, 2210], price: [288, 355, 644, 771, 1034] },
+    {
+      mcap: [3100, 3450, 4100, 3800, 3950, 4400, 4200, 4550, 4850, 5200, 5600, 6100],
+      pat: [55, 49, 42, 50, 46, 52, 56, 62, 66, 72, 79, 88],
+      rev: [391, 377, 369, 413, 415, 438, 452, 480, 505, 535, 565, 605],
+      price: [525, 585, 695, 644, 669, 745, 712, 771, 822, 881, 949, 1034]
+    }
+  ),
 
-  // ==================== LARGE CAPS (₹20,000 CR - ₹1 LAKH CR) ====================
-  {
-    id: "sunpharma",
-    name: "Sun Pharmaceutical Industries Ltd",
-    symbol: "SUNPHARMA",
-    bseCode: "524715",
-    sector: "Healthcare",
-    category: "Large Cap (₹20k - ₹1 Lakh Cr)",
-    headquarters: "Mumbai, Maharashtra",
-    founded: 1983,
-    description: "India's #1 pharmaceutical company and world's 4th largest specialty generic drugmaker with major focus on global dermatology and ophthalmology.",
-    benchmarks: { peRatio: 37.8, pbRatio: 6.2, dividendYieldPct: 0.75, faceValueInr: 1, fiftyTwoWeekHigh: 1960.0, fiftyTwoWeekLow: 1180.0 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 245000, patCr: 2022, revenueCr: 11940, patMarginPct: 16.93, sharePriceInr: 1022, eventNote: "Global specialty sales up 21%" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 275000, patCr: 2375, revenueCr: 12192, patMarginPct: 19.48, sharePriceInr: 1145, eventNote: "US formulations reach $430M" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 310000, patCr: 2524, revenueCr: 12380, patMarginPct: 20.39, sharePriceInr: 1290, eventNote: "Ilumya and Cequa blockbuster growth" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 365000, patCr: 2654, revenueCr: 11982, patMarginPct: 22.15, sharePriceInr: 1520, eventNote: "Specialty business touches $1B annual run rate" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 388000, patCr: 2835, revenueCr: 12652, patMarginPct: 22.41, sharePriceInr: 1618, eventNote: "R&D spend at 6.8% of sales" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 458000, patCr: 3040, revenueCr: 13420, patMarginPct: 22.65, sharePriceInr: 1910, eventNote: "FDA approves Leqselvi for alopecia" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 468000, patCr: 3260, revenueCr: 14180, patMarginPct: 22.99, sharePriceInr: 1952, eventNote: "India formulation sales rise 11%" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 482000, patCr: 3510, revenueCr: 14950, patMarginPct: 23.48, sharePriceInr: 2010, eventNote: "Full year net profit crosses ₹13,000 Cr" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 528000, patCr: 3790, revenueCr: 15850, patMarginPct: 23.91, sharePriceInr: 2202, eventNote: "Sun Pharma scales past ₹5 Lakh Cr M-Cap" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 548000, patCr: 4100, revenueCr: 16750, patMarginPct: 24.48, sharePriceInr: 2285, eventNote: "Novel oncology portfolio launched in EU" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 605000, patCr: 4510, revenueCr: 17900, patMarginPct: 25.20, sharePriceInr: 2523, eventNote: "Phase 3 clinical trial success in immunology" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 642000, patCr: 4910, revenueCr: 18900, patMarginPct: 25.98, sharePriceInr: 2677, eventNote: "Quarterly PAT approaches ₹5,000 Cr run rate" },
-    ],
-  },
-  {
-    id: "bel",
-    name: "Bharat Electronics Ltd",
-    symbol: "BEL",
-    bseCode: "500049",
-    sector: "Electronics & Industrial",
-    category: "Large Cap (₹20k - ₹1 Lakh Cr)",
-    headquarters: "Bengaluru, Karnataka",
-    founded: 1954,
-    description: "India's premier defense electronics Navratna PSU supplying military radars, electronic warfare systems, avionics, and missile electronics.",
-    benchmarks: { peRatio: 48.2, pbRatio: 11.5, dividendYieldPct: 0.72, faceValueInr: 1, fiftyTwoWeekHigh: 340.5, fiftyTwoWeekLow: 127.0 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 92000, patCr: 531, revenueCr: 3511, patMarginPct: 15.12, sharePriceInr: 126, eventNote: "Order book stands at ₹65,356 Cr" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 102000, patCr: 812, revenueCr: 3993, patMarginPct: 20.34, sharePriceInr: 140, eventNote: "Akash missile system electronic contract wins" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 135000, patCr: 859, revenueCr: 4162, patMarginPct: 20.64, sharePriceInr: 185, eventNote: "Export orders up 45%" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 172000, patCr: 1784, revenueCr: 8564, patMarginPct: 20.83, sharePriceInr: 235, eventNote: "FY24 order inflows cross ₹35,000 Cr" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 226000, patCr: 776, revenueCr: 4199, patMarginPct: 18.48, sharePriceInr: 309, eventNote: "Stock enters ₹2 Lakh Cr Market Cap" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 218000, patCr: 1091, revenueCr: 4583, patMarginPct: 23.80, sharePriceInr: 298, eventNote: "Q2 net profit surges 34% YoY" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 210000, patCr: 1180, revenueCr: 4850, patMarginPct: 24.33, sharePriceInr: 287, eventNote: "Non-defense metro rail signaling expands" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 235000, patCr: 2240, revenueCr: 9800, patMarginPct: 22.86, sharePriceInr: 321, eventNote: "Annual profit reaches ₹5,200 Cr" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 245000, patCr: 1120, revenueCr: 5200, patMarginPct: 21.54, sharePriceInr: 335, eventNote: "Next-gen fighter jet radar deliveries commence" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 260000, patCr: 1450, revenueCr: 5650, patMarginPct: 25.66, sharePriceInr: 356, eventNote: "Order backlog breaches ₹85,000 Cr" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 275000, patCr: 1580, revenueCr: 6100, patMarginPct: 25.90, sharePriceInr: 376, eventNote: "Anti-drone countermeasure systems contracted" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 295000, patCr: 2750, revenueCr: 11200, patMarginPct: 24.55, sharePriceInr: 404, eventNote: "Full year FY26 PAT crosses ₹6,900 Cr" },
-    ],
-  },
-  {
-    id: "trent",
-    name: "Trent Ltd",
-    symbol: "TRENT",
-    bseCode: "500251",
-    sector: "Consumer & Retail",
-    category: "Large Cap (₹20k - ₹1 Lakh Cr)",
-    headquarters: "Mumbai, Maharashtra",
-    founded: 1998,
-    description: "Tata Group's retail sensation behind Zudio value-fashion revolution and Westside lifestyle department chain, boasting 40%+ revenue CAGR.",
-    benchmarks: { peRatio: 112.5, pbRatio: 38.4, dividendYieldPct: 0.08, faceValueInr: 1, fiftyTwoWeekHigh: 8345.0, fiftyTwoWeekLow: 2320.0 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 62000, patCr: 167, revenueCr: 2628, patMarginPct: 6.35, sharePriceInr: 1740, eventNote: "Zudio store count hits 350" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 75000, patCr: 228, revenueCr: 2982, patMarginPct: 7.65, sharePriceInr: 2110, eventNote: "Same-store sales growth touches 12%" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 108000, patCr: 374, revenueCr: 3467, patMarginPct: 10.79, sharePriceInr: 3040, eventNote: "Festive quarter operating profit up 95%" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 140000, patCr: 712, revenueCr: 3298, patMarginPct: 21.59, sharePriceInr: 3940, eventNote: "Star Bazaar JV turns profitable" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 200000, patCr: 423, revenueCr: 4104, patMarginPct: 10.31, sharePriceInr: 5630, eventNote: "Included in Nifty 50 benchmark index" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 285000, patCr: 512, revenueCr: 4680, patMarginPct: 10.94, sharePriceInr: 8020, eventNote: "Stock hits historic peak of ₹8,345" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 265000, patCr: 585, revenueCr: 5200, patMarginPct: 11.25, sharePriceInr: 7450, eventNote: "Zudio store footprint reaches 600" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 250000, patCr: 640, revenueCr: 5450, patMarginPct: 11.74, sharePriceInr: 7030, eventNote: "Full year sales cross ₹19,000 Cr" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 275000, patCr: 710, revenueCr: 5950, patMarginPct: 11.93, sharePriceInr: 7730, eventNote: "International expansion into UAE initiated" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2026", financialYear: "FY26", marketCapCr: 295000, patCr: 795, revenueCr: 6500, patMarginPct: 12.23, sharePriceInr: 8290, eventNote: "Zudio Beauty private label line expands" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 320000, patCr: 885, revenueCr: 7150, patMarginPct: 12.38, sharePriceInr: 9000, eventNote: "Quarterly revenue crosses ₹7,000 Cr" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 340000, patCr: 960, revenueCr: 7500, patMarginPct: 12.80, sharePriceInr: 9560, eventNote: "Full year FY26 PAT approaches ₹3,350 Cr" },
-    ],
-  },
-  {
-    id: "polycab",
-    name: "Polycab India Ltd",
-    symbol: "POLYCAB",
-    bseCode: "542652",
-    sector: "Electronics & Industrial",
-    category: "Large Cap (₹20k - ₹1 Lakh Cr)",
-    headquarters: "Mumbai, Maharashtra",
-    founded: 1968,
-    description: "India's #1 manufacturer of wires and cables with 25%+ market share in organized cabling and rapid expansion in Fast Moving Electrical Goods (FMEG).",
-    benchmarks: { peRatio: 42.1, pbRatio: 9.3, dividendYieldPct: 0.52, faceValueInr: 10, fiftyTwoWeekHigh: 7330.0, fiftyTwoWeekLow: 3812.0 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 64000, patCr: 403, revenueCr: 3889, patMarginPct: 10.36, sharePriceInr: 4260, eventNote: "Wires & cables volume growth up 24%" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 79000, patCr: 430, revenueCr: 4218, patMarginPct: 10.19, sharePriceInr: 5260, eventNote: "EBITDA margin up 13.9%" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 65000, patCr: 417, revenueCr: 4340, patMarginPct: 9.61, sharePriceInr: 4330, eventNote: "Tax survey clarified with clean disclosures" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 84000, patCr: 553, revenueCr: 5592, patMarginPct: 9.89, sharePriceInr: 5590, eventNote: "Annual profit crosses ₹1,800 Cr" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 105000, patCr: 401, revenueCr: 4698, patMarginPct: 8.54, sharePriceInr: 6990, eventNote: "Stock enters ₹1 Lakh Cr Market Cap" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 108000, patCr: 440, revenueCr: 5498, patMarginPct: 8.00, sharePriceInr: 7180, eventNote: "Institutional cables demand driven by data centers" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 102000, patCr: 495, revenueCr: 5750, patMarginPct: 8.61, sharePriceInr: 6790, eventNote: "FMEG losses narrow significantly" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 110000, patCr: 620, revenueCr: 6850, patMarginPct: 9.05, sharePriceInr: 7320, eventNote: "International export revenue crosses 12%" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 118000, patCr: 540, revenueCr: 5800, patMarginPct: 9.31, sharePriceInr: 7850, eventNote: "Extra-high voltage (EHV) plant commissioned" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 122000, patCr: 595, revenueCr: 6450, patMarginPct: 9.22, sharePriceInr: 8120, eventNote: "Solar cable shipments double YoY" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 130000, patCr: 660, revenueCr: 6950, patMarginPct: 9.50, sharePriceInr: 8650, eventNote: "Operating cash flow touches record peak" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 138000, patCr: 780, revenueCr: 8100, patMarginPct: 9.63, sharePriceInr: 9180, eventNote: "Full year FY26 PAT crosses ₹2,500 Cr" },
-    ],
-  },
+  // ==================== BANKING & FINANCIALS ====================
+  createCompany(
+    "hdfcbank", "HDFC Bank Ltd", "HDFCBANK", "500180",
+    "Banking & Finance", "Private Banking", "Mega Cap (> ₹1 Lakh Cr)",
+    "Mumbai, Maharashtra", ["ICICIBANK", "SBIN", "KOTAKBANK", "AXISBANK"],
+    { peRatio: 18.6, pbRatio: 2.7, dividendYieldPct: 1.15, fiftyTwoWeekHigh: 1794.0, fiftyTwoWeekLow: 1363.5 },
+    { mcap: [810000, 900000, 1150000, 1410000, 1710000], pat: [36961, 44109, 64060, 70500, 82000], rev: [157774, 192800, 276800, 305000, 345000], price: [1470, 1610, 1515, 1858, 2253] },
+    {
+      mcap: [1250000, 1160000, 1270000, 1150000, 1290000, 1335000, 1375000, 1410000, 1490000, 1530000, 1640000, 1710000],
+      pat: [11952, 15976, 16372, 16512, 16800, 17280, 17820, 18350, 18920, 19520, 20250, 20950],
+      rev: [57816, 66317, 71111, 71780, 73200, 75400, 77700, 79800, 82000, 84100, 86600, 88800],
+      price: [1640, 1530, 1670, 1515, 1700, 1760, 1812, 1858, 1963, 2016, 2161, 2253]
+    }
+  ),
+  createCompany(
+    "icicibank", "ICICI Bank Ltd", "ICICIBANK", "532174",
+    "Banking & Finance", "Private Banking", "Mega Cap (> ₹1 Lakh Cr)",
+    "Mumbai, Maharashtra", ["HDFCBANK", "SBIN", "KOTAKBANK", "AXISBANK"],
+    { peRatio: 17.2, pbRatio: 2.8, dividendYieldPct: 0.90, fiftyTwoWeekHigh: 1332.0, fiftyTwoWeekLow: 980.0 },
+    { mcap: [505000, 610000, 775000, 975000, 1235000], pat: [23339, 31896, 40888, 47000, 58000], rev: [123398, 144500, 168000, 192000, 225000], price: [730, 880, 1105, 1390, 1761] },
+    {
+      mcap: [660000, 675000, 710000, 775000, 845000, 915000, 935000, 975000, 1050000, 1080000, 1175000, 1235000],
+      pat: [9648, 10261, 10272, 10708, 11059, 11480, 11980, 12480, 12980, 13490, 14120, 14750],
+      rev: [38763, 40697, 42200, 43590, 45050, 46900, 48800, 50800, 52600, 54400, 56700, 58800],
+      price: [942, 963, 1012, 1105, 1205, 1305, 1334, 1390, 1497, 1540, 1675, 1761]
+    }
+  ),
+  createCompany(
+    "sbin", "State Bank of India", "SBIN", "500112",
+    "Banking & Finance", "Public Banking", "Mega Cap (> ₹1 Lakh Cr)",
+    "Mumbai, Maharashtra", ["HDFCBANK", "ICICIBANK", "BANKBARODA", "PNB"],
+    { peRatio: 10.9, pbRatio: 1.45, dividendYieldPct: 1.68, fiftyTwoWeekHigh: 912.0, fiftyTwoWeekLow: 560.0 },
+    { mcap: [440000, 465000, 720000, 810000, 1055000], pat: [31676, 50232, 61077, 75000, 92000], rev: [320000, 385000, 465000, 520000, 595000], price: [493, 521, 808, 908, 1184] },
+    {
+      mcap: [510000, 535000, 575000, 720000, 760000, 710000, 780000, 810000, 880000, 910000, 990000, 1055000],
+      pat: [16884, 14330, 9164, 20698, 17035, 18331, 19150, 21500, 20800, 21850, 23150, 24800],
+      rev: [108039, 112169, 118193, 128412, 122688, 129291, 133800, 142000, 141200, 146100, 152300, 160000],
+      price: [572, 600, 645, 808, 852, 796, 874, 908, 987, 1021, 1111, 1184]
+    }
+  ),
+  createCompany(
+    "kotakbank", "Kotak Mahindra Bank Ltd", "KOTAKBANK", "500247",
+    "Banking & Finance", "Private Banking", "Mega Cap (> ₹1 Lakh Cr)",
+    "Mumbai, Maharashtra", ["HDFCBANK", "ICICIBANK", "AXISBANK", "SBIN"],
+    { peRatio: 19.8, pbRatio: 2.5, dividendYieldPct: 0.12, fiftyTwoWeekHigh: 1940.0, fiftyTwoWeekLow: 1540.0 },
+    { mcap: [350000, 345000, 355000, 380000, 420000], pat: [12089, 14925, 18213, 20400, 23800], rev: [58000, 68000, 82000, 92000, 106000], price: [1760, 1735, 1785, 1910, 2110] },
+    {
+      mcap: [365000, 352000, 380000, 355000, 348000, 372000, 375000, 380000, 395000, 402000, 412000, 420000],
+      pat: [4150, 4423, 4265, 5375, 4520, 5044, 4980, 5856, 5420, 5890, 6120, 6370],
+      rev: [18100, 19500, 20200, 24200, 22100, 23500, 24100, 26300, 25800, 27200, 28100, 29500],
+      price: [1835, 1770, 1910, 1785, 1750, 1870, 1885, 1910, 1985, 2020, 2070, 2110]
+    }
+  ),
+  createCompany(
+    "cdsl", "Central Depository Services Ltd", "CDSL", "540716",
+    "Banking & Finance", "Securities Depository & Capital Market", "Large Cap (₹20k - ₹1 Lakh Cr)",
+    "Mumbai, Maharashtra", ["BSE", "MCX", "ANGELONE"],
+    { peRatio: 54.8, pbRatio: 16.2, dividendYieldPct: 0.88, fiftyTwoWeekHigh: 1664.0, fiftyTwoWeekLow: 870.0 },
+    { mcap: [14200, 10400, 21500, 31000, 40500], pat: [311, 276, 418, 620, 810], rev: [606, 621, 893, 1220, 1590], price: [679, 498, 1028, 1482, 1937] },
+    {
+      mcap: [12500, 14200, 18900, 21500, 26000, 32500, 29500, 31000, 33500, 35000, 37500, 40500],
+      pat: [74, 109, 107, 129, 134, 162, 158, 175, 182, 195, 210, 232],
+      rev: [170, 207, 214, 241, 257, 322, 310, 345, 365, 390, 418, 455],
+      price: [598, 679, 904, 1028, 1243, 1554, 1410, 1482, 1602, 1674, 1793, 1937]
+    }
+  ),
 
-  // ==================== MID CAPS (₹5,000 CR - ₹20,000 CR) ====================
-  {
-    id: "persistent",
-    name: "Persistent Systems Ltd",
-    symbol: "PERSISTENT",
-    bseCode: "533179",
-    sector: "Information Technology",
-    category: "Mid Cap (₹5k - ₹20k Cr)",
-    headquarters: "Pune, Maharashtra",
-    founded: 1990,
-    description: "High-growth digital engineering and enterprise modernization software specialist with consistent 16-quarter industry outperformance.",
-    benchmarks: { peRatio: 49.5, pbRatio: 9.8, dividendYieldPct: 0.85, faceValueInr: 5, fiftyTwoWeekHigh: 5950.0, fiftyTwoWeekLow: 3450.0 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 38000, patCr: 229, revenueCr: 2321, patMarginPct: 9.87, sharePriceInr: 2470, eventNote: "13th consecutive quarter of revenue growth" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 44000, patCr: 263, revenueCr: 2412, patMarginPct: 10.90, sharePriceInr: 2860, eventNote: "Healthcare vertical deal acceleration" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 58000, patCr: 286, revenueCr: 2498, patMarginPct: 11.45, sharePriceInr: 3770, eventNote: "Stock 1:2 split announced" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 61000, patCr: 315, revenueCr: 2590, patMarginPct: 12.16, sharePriceInr: 3960, eventNote: "Deal TCV hits record $447M" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 72000, patCr: 306, revenueCr: 2737, patMarginPct: 11.18, sharePriceInr: 4680, eventNote: "GenAI solution suites rolled out" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 84000, patCr: 325, revenueCr: 2897, patMarginPct: 11.22, sharePriceInr: 5460, eventNote: "EBIT margin expands to 14.0%" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 88000, patCr: 355, revenueCr: 3050, patMarginPct: 11.64, sharePriceInr: 5720, eventNote: "Software products licensing up 18%" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 85000, patCr: 380, revenueCr: 3200, patMarginPct: 11.88, sharePriceInr: 5520, eventNote: "Annual profit crosses ₹1,360 Cr" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 92000, patCr: 405, revenueCr: 3380, patMarginPct: 11.98, sharePriceInr: 5980, eventNote: "Cloud modernization contract renewals" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 98000, patCr: 435, revenueCr: 3580, patMarginPct: 12.15, sharePriceInr: 6370, eventNote: "BFSI digital core migration partnerships" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 104000, patCr: 470, revenueCr: 3790, patMarginPct: 12.40, sharePriceInr: 6760, eventNote: "Operating margins strengthen toward 15%" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 112000, patCr: 510, revenueCr: 4010, patMarginPct: 12.72, sharePriceInr: 7280, eventNote: "Full year FY26 PAT crosses ₹1,800 Cr" },
-    ],
-  },
-  {
-    id: "prajind",
-    name: "Praj Industries Ltd",
-    symbol: "PRAJIND",
-    bseCode: "522205",
-    sector: "Chemicals & Energy",
-    category: "Mid Cap (₹5k - ₹20k Cr)",
-    headquarters: "Pune, Maharashtra",
-    founded: 1983,
-    description: "Global process engineering and biotechnology pioneer in bio-ethanol, compressed biogas (CBG), and sustainable aviation fuels (SAF).",
-    benchmarks: { peRatio: 36.2, pbRatio: 6.8, dividendYieldPct: 1.12, faceValueInr: 2, fiftyTwoWeekHigh: 848.0, fiftyTwoWeekLow: 460.0 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 8800, patCr: 59, revenueCr: 737, patMarginPct: 8.01, sharePriceInr: 478, eventNote: "Order intake rises 28% YoY" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 10200, patCr: 62, revenueCr: 885, patMarginPct: 7.01, sharePriceInr: 554, eventNote: "First Commercial SAF plant trial" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 11500, patCr: 117, revenueCr: 829, patMarginPct: 14.11, sharePriceInr: 625, eventNote: "Gen-2 ethanol plant commissioning billed" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 10500, patCr: 92, revenueCr: 1019, patMarginPct: 9.03, sharePriceInr: 570, eventNote: "Order book crosses ₹4,000 Cr mark" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 12800, patCr: 84, revenueCr: 699, patMarginPct: 12.02, sharePriceInr: 695, eventNote: "CBG policy mandates fuel demand" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 15200, patCr: 95, revenueCr: 816, patMarginPct: 11.64, sharePriceInr: 825, eventNote: "Stock hits 52-week peak" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 13800, patCr: 108, revenueCr: 920, patMarginPct: 11.74, sharePriceInr: 749, eventNote: "International bio-energy orders jump 35%" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 14500, patCr: 122, revenueCr: 1150, patMarginPct: 10.61, sharePriceInr: 787, eventNote: "Full year FY25 PAT reaches ₹409 Cr" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 15800, patCr: 115, revenueCr: 980, patMarginPct: 11.73, sharePriceInr: 858, eventNote: "Sustainable Aviation Fuel pilot flight success" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 16900, patCr: 128, revenueCr: 1080, patMarginPct: 11.85, sharePriceInr: 918, eventNote: "Bio-polymers division generates commercial sales" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 18200, patCr: 142, revenueCr: 1210, patMarginPct: 11.74, sharePriceInr: 988, eventNote: "Export order book reaches $180M" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 19500, patCr: 165, revenueCr: 1420, patMarginPct: 11.62, sharePriceInr: 1059, eventNote: "Market cap approaches ₹20,000 Cr boundary" },
-    ],
-  },
-  {
-    id: "cdsl",
-    name: "Central Depository Services (India) Ltd",
-    symbol: "CDSL",
-    bseCode: "540716",
-    sector: "Banking & Finance",
-    category: "Mid Cap (₹5k - ₹20k Cr)",
-    headquarters: "Mumbai, Maharashtra",
-    founded: 1999,
-    description: "India's largest securities depository with 130M+ active demat accounts, riding the financialization wave of Indian household savings.",
-    benchmarks: { peRatio: 54.8, pbRatio: 16.2, dividendYieldPct: 0.88, faceValueInr: 10, fiftyTwoWeekHigh: 1664.0, fiftyTwoWeekLow: 870.0 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 12500, patCr: 74, revenueCr: 170, patMarginPct: 43.53, sharePriceInr: 598, eventNote: "Active Demat accounts cross 88M" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 14200, patCr: 109, revenueCr: 207, patMarginPct: 52.66, sharePriceInr: 679, eventNote: "Q2 net profit up 35% YoY" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 18900, patCr: 107, revenueCr: 214, patMarginPct: 50.00, sharePriceInr: 904, eventNote: "IPO and retail trading volume surge" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 21500, patCr: 129, revenueCr: 241, patMarginPct: 53.53, sharePriceInr: 1028, eventNote: "Annual profit crosses ₹418 Cr" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 26000, patCr: 134, revenueCr: 257, patMarginPct: 52.14, sharePriceInr: 1243, eventNote: "Demat accounts cross 115M" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 32500, patCr: 162, revenueCr: 322, patMarginPct: 50.31, sharePriceInr: 1554, eventNote: "1:1 Bonus share issue implemented" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 29500, patCr: 158, revenueCr: 310, patMarginPct: 50.97, sharePriceInr: 1410, eventNote: "Transaction charges revised slightly" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 31000, patCr: 175, revenueCr: 345, patMarginPct: 50.72, sharePriceInr: 1482, eventNote: "Full year net profit crosses ₹620 Cr" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 33500, patCr: 182, revenueCr: 365, patMarginPct: 49.86, sharePriceInr: 1602, eventNote: "Demat accounts surpass 135M count" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 35000, patCr: 195, revenueCr: 390, patMarginPct: 50.00, sharePriceInr: 1674, eventNote: "Mutual fund central repository usage up 40%" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 37500, patCr: 210, revenueCr: 418, patMarginPct: 50.24, sharePriceInr: 1793, eventNote: "Pledge and e-KYC transaction fee growth" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 40500, patCr: 232, revenueCr: 455, patMarginPct: 50.99, sharePriceInr: 1937, eventNote: "Full year FY26 PAT surpasses ₹810 Cr" },
-    ],
-  },
+  // ==================== CONGLOMERATES & ENERGY ====================
+  createCompany(
+    "reliance", "Reliance Industries Ltd", "RELIANCE", "500325",
+    "Conglomerate", "Oil, Gas, Telecom & Retail", "Mega Cap (> ₹1 Lakh Cr)",
+    "Mumbai, Maharashtra", ["ADANIENT", "IOCL", "BPCL", "ONGC", "TATAPOWER"],
+    { peRatio: 26.8, pbRatio: 2.2, dividendYieldPct: 0.38, fiftyTwoWeekHigh: 3217.9, fiftyTwoWeekLow: 2220.3 },
+    { mcap: [1780000, 1580000, 1948500, 1960000, 2380000], pat: [67845, 74088, 69621, 78000, 95000], rev: [792756, 892913, 914472, 985000, 1120000], price: [2630, 2335, 2880, 2898, 3518] },
+    {
+      mcap: [1745000, 1680000, 1765000, 1948500, 2045000, 2015000, 1875000, 1960000, 2085000, 2140000, 2290000, 2380000],
+      pat: [16011, 17394, 17265, 18951, 19400, 19800, 20100, 21100, 21850, 22650, 23550, 24450],
+      rev: [210831, 234956, 228160, 236533, 242100, 245200, 251000, 258900, 266200, 273800, 283100, 291500],
+      price: [2580, 2485, 2610, 2880, 3020, 2978, 2772, 2898, 3082, 3164, 3385, 3518]
+    }
+  ),
+  createCompany(
+    "tatapower", "Tata Power Company Ltd", "TATAPOWER", "500400",
+    "Energy & Utilities", "Power Generation & Renewables", "Mega Cap (> ₹1 Lakh Cr)",
+    "Mumbai, Maharashtra", ["NTPC", "POWERGRID", "RELIANCE"],
+    { peRatio: 34.2, pbRatio: 4.1, dividendYieldPct: 0.48, fiftyTwoWeekHigh: 494.8, fiftyTwoWeekLow: 310.0 },
+    { mcap: [71000, 60000, 125000, 142000, 168000], pat: [2156, 3810, 4280, 5100, 6300], rev: [42576, 56033, 61542, 68000, 77000], price: [222, 188, 391, 444, 526] },
+    {
+      mcap: [70000, 82000, 105000, 125000, 138000, 148000, 136000, 142000, 150000, 156000, 162000, 168000],
+      pat: [1141, 1017, 1076, 1046, 1189, 1093, 1240, 1380, 1420, 1490, 1580, 1680],
+      rev: [15000, 15442, 14841, 16259, 17293, 15697, 16800, 17800, 18500, 19200, 20100, 21200],
+      price: [219, 256, 328, 391, 431, 463, 425, 444, 469, 488, 507, 526]
+    }
+  ),
+  createCompany(
+    "prajind", "Praj Industries Ltd", "PRAJIND", "522205",
+    "Chemicals & Energy", "Bio-Energy & Process Engineering", "Mid Cap (₹5k - ₹20k Cr)",
+    "Pune, Maharashtra", ["CLEAN", "DEEPAKNTR", "PIIND"],
+    { peRatio: 36.2, pbRatio: 6.8, dividendYieldPct: 1.12, fiftyTwoWeekHigh: 848.0, fiftyTwoWeekLow: 460.0 },
+    { mcap: [7200, 7000, 10500, 14500, 19500], pat: [150, 240, 280, 409, 550], rev: [2343, 3528, 3960, 4200, 5100], price: [392, 381, 570, 787, 1059] },
+    {
+      mcap: [8800, 10200, 11500, 10500, 12800, 15200, 13800, 14500, 15800, 16900, 18200, 19500],
+      pat: [59, 62, 117, 92, 84, 95, 108, 122, 115, 128, 142, 165],
+      rev: [737, 885, 829, 1019, 699, 816, 920, 1150, 980, 1080, 1210, 1420],
+      price: [478, 554, 625, 570, 695, 825, 749, 787, 858, 918, 988, 1059]
+    }
+  ),
 
-  // ==================== SMALL CAPS (₹500 CR - ₹5,000 CR) ====================
-  {
-    id: "rategain",
-    name: "RateGain Travel Technologies Ltd",
-    symbol: "RATEGAIN",
-    bseCode: "543417",
-    sector: "Information Technology",
-    category: "Small Cap (₹500 Cr - ₹5k Cr)",
-    headquarters: "Noida, Uttar Pradesh",
-    founded: 2004,
-    description: "Global AI-powered SaaS provider for travel and hospitality enterprise clients offering revenue management, rate intelligence, and distribution.",
-    benchmarks: { peRatio: 41.2, pbRatio: 4.8, dividendYieldPct: 0.15, faceValueInr: 1, fiftyTwoWeekHigh: 922.0, fiftyTwoWeekLow: 512.0 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 6800, patCr: 25, revenueCr: 214, patMarginPct: 11.68, sharePriceInr: 625, eventNote: "Annual recurring revenue up 40%" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 7400, patCr: 30, revenueCr: 235, patMarginPct: 12.77, sharePriceInr: 680, eventNote: "Adara marketing acquisition synergies realized" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 9100, patCr: 40, revenueCr: 252, patMarginPct: 15.87, sharePriceInr: 836, eventNote: "QIP institutional capital raise of ₹600 Cr" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 8800, patCr: 50, revenueCr: 256, patMarginPct: 19.53, sharePriceInr: 808, eventNote: "FY24 Net profit triples to ₹145 Cr" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 8200, patCr: 45, revenueCr: 260, patMarginPct: 17.31, sharePriceInr: 753, eventNote: "Enterprise hotel tier contracts signed" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 8600, patCr: 52, revenueCr: 277, patMarginPct: 18.77, sharePriceInr: 790, eventNote: "AI RevAI price recommendation usage jumps" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 8100, patCr: 58, revenueCr: 295, patMarginPct: 19.66, sharePriceInr: 744, eventNote: "Global airline pricing partnerships" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 8500, patCr: 65, revenueCr: 312, patMarginPct: 20.83, sharePriceInr: 781, eventNote: "Annual net profit touches ₹220 Cr" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 9200, patCr: 68, revenueCr: 330, patMarginPct: 20.61, sharePriceInr: 845, eventNote: "North American hotel chain multi-year rollout" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 9800, patCr: 76, revenueCr: 355, patMarginPct: 21.41, sharePriceInr: 900, eventNote: "EBITDA margin scales to 23%" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 10400, patCr: 84, revenueCr: 380, patMarginPct: 22.11, sharePriceInr: 955, eventNote: "Enterprise retention rate stands at 108%" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 11100, patCr: 94, revenueCr: 410, patMarginPct: 22.93, sharePriceInr: 1020, eventNote: "Full year FY26 PAT exceeds ₹320 Cr" },
-    ],
-  },
-  {
-    id: "marksans",
-    name: "Marksans Pharma Ltd",
-    symbol: "MARKSANS",
-    bseCode: "532482",
-    sector: "Healthcare",
-    category: "Small Cap (₹500 Cr - ₹5k Cr)",
-    headquarters: "Mumbai, Maharashtra",
-    founded: 1992,
-    description: "Export-driven formulations pharma enterprise operating across UK, US, and Australia with high-margin over-the-counter (OTC) and softgel manufacturing.",
-    benchmarks: { peRatio: 26.4, pbRatio: 4.1, dividendYieldPct: 0.35, faceValueInr: 1, fiftyTwoWeekHigh: 338.0, fiftyTwoWeekLow: 132.0 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 4200, patCr: 71, revenueCr: 500, patMarginPct: 14.20, sharePriceInr: 92, eventNote: "Teva plant acquisition integration commences" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 5100, patCr: 83, revenueCr: 531, patMarginPct: 15.63, sharePriceInr: 112, eventNote: "UK market share expands" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 7200, patCr: 83, revenueCr: 586, patMarginPct: 14.16, sharePriceInr: 158, eventNote: "US FDA inspection cleared with zero 483 observations" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 7600, patCr: 78, revenueCr: 560, patMarginPct: 13.93, sharePriceInr: 167, eventNote: "Annual profit reaches ₹315 Cr" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 9800, patCr: 89, revenueCr: 610, patMarginPct: 14.59, sharePriceInr: 215, eventNote: "Quarterly revenue crosses ₹600 Cr" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 12500, patCr: 97, revenueCr: 648, patMarginPct: 14.97, sharePriceInr: 274, eventNote: "Stock doubles over 6-month period" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 14200, patCr: 108, revenueCr: 690, patMarginPct: 15.65, sharePriceInr: 312, eventNote: "High-margin softgel lines operationalized" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 13500, patCr: 116, revenueCr: 720, patMarginPct: 16.11, sharePriceInr: 296, eventNote: "Annual PAT crosses ₹400 Cr threshold" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 14800, patCr: 124, revenueCr: 760, patMarginPct: 16.32, sharePriceInr: 325, eventNote: "New OTC pain management approvals in UK" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 15600, patCr: 135, revenueCr: 810, patMarginPct: 16.67, sharePriceInr: 342, eventNote: "US direct distribution sales double" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 16500, patCr: 148, revenueCr: 865, patMarginPct: 17.11, sharePriceInr: 362, eventNote: "Gross margin expands to 53%" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 17800, patCr: 162, revenueCr: 920, patMarginPct: 17.61, sharePriceInr: 390, eventNote: "Full year FY26 PAT reaches ₹570 Cr" },
-    ],
-  },
-  {
-    id: "datamatics",
-    name: "Datamatics Global Services Ltd",
-    symbol: "DATAMATICS",
-    bseCode: "532528",
-    sector: "Information Technology",
-    category: "Small Cap (₹500 Cr - ₹5k Cr)",
-    headquarters: "Mumbai, Maharashtra",
-    founded: 1975,
-    description: "Enterprise intelligent automation, digital workplace, and automated fare collection software products for tier-1 transit metro networks.",
-    benchmarks: { peRatio: 18.4, pbRatio: 2.9, dividendYieldPct: 1.05, faceValueInr: 5, fiftyTwoWeekHigh: 814.0, fiftyTwoWeekLow: 440.0 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 3100, patCr: 55, revenueCr: 391, patMarginPct: 14.07, sharePriceInr: 525, eventNote: "Automatic fare collection orders in US" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 3450, patCr: 49, revenueCr: 377, patMarginPct: 13.00, sharePriceInr: 585, eventNote: "GenAI patent filings approved" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 4100, patCr: 42, revenueCr: 369, patMarginPct: 11.38, sharePriceInr: 695, eventNote: "Acquisition of Dextara Digital for Salesforce" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 3800, patCr: 50, revenueCr: 413, patMarginPct: 12.11, sharePriceInr: 644, eventNote: "Full year net profit at ₹196 Cr" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 3950, patCr: 46, revenueCr: 415, patMarginPct: 11.08, sharePriceInr: 669, eventNote: "TruCap+ intelligent doc processing updates" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 4400, patCr: 52, revenueCr: 438, patMarginPct: 11.87, sharePriceInr: 745, eventNote: "Delhi Metro phase 4 ticketing contract win" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 4200, patCr: 56, revenueCr: 452, patMarginPct: 12.39, sharePriceInr: 712, eventNote: "Digital engineering revenue up 19%" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 4550, patCr: 62, revenueCr: 480, patMarginPct: 12.92, sharePriceInr: 771, eventNote: "Annual profit reaches ₹216 Cr" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 4850, patCr: 66, revenueCr: 505, patMarginPct: 13.07, sharePriceInr: 822, eventNote: "AI Copilot workflows integrated into BPO" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 5200, patCr: 72, revenueCr: 535, patMarginPct: 13.46, sharePriceInr: 881, eventNote: "Company crosses ₹5,000 Cr Market Cap" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 5600, patCr: 79, revenueCr: 565, patMarginPct: 13.98, sharePriceInr: 949, eventNote: "Global transit automation wins in Europe" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 6100, patCr: 88, revenueCr: 605, patMarginPct: 14.55, sharePriceInr: 1034, eventNote: "Full year FY26 PAT surpasses ₹300 Cr" },
-    ],
-  },
-  {
-    id: "dynamiccables",
-    name: "Dynamic Cables Ltd",
-    symbol: "DYCL",
-    bseCode: "540795",
-    sector: "Electronics & Industrial",
-    category: "Small Cap (₹500 Cr - ₹5k Cr)",
-    headquarters: "Jaipur, Rajasthan",
-    founded: 1986,
-    description: "Rapidly growing manufacturer of power cables, medium & high voltage cables, and railway signaling conductors benefiting from national grid expansion.",
-    benchmarks: { peRatio: 28.5, pbRatio: 4.6, dividendYieldPct: 0.28, faceValueInr: 10, fiftyTwoWeekHigh: 685.0, fiftyTwoWeekLow: 280.0 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 850, patCr: 9, revenueCr: 181, patMarginPct: 4.97, sharePriceInr: 386, eventNote: "Order book at record high" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 1050, patCr: 11, revenueCr: 202, patMarginPct: 5.45, sharePriceInr: 477, eventNote: "Power distribution discom orders increase" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 1180, patCr: 13, revenueCr: 218, patMarginPct: 5.96, sharePriceInr: 536, eventNote: "Export orders up 60%" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 1100, patCr: 15, revenueCr: 236, patMarginPct: 6.36, sharePriceInr: 500, eventNote: "Full year PAT touches ₹48 Cr" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 1320, patCr: 14, revenueCr: 228, patMarginPct: 6.14, sharePriceInr: 600, eventNote: "Renewable energy solar park cables dispatch" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 1480, patCr: 17, revenueCr: 254, patMarginPct: 6.69, sharePriceInr: 672, eventNote: "Capacity expansion phase 1 commissioned" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 1380, patCr: 18, revenueCr: 268, patMarginPct: 6.72, sharePriceInr: 627, eventNote: "Railway electrification conductors growth" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 1450, patCr: 21, revenueCr: 295, patMarginPct: 7.12, sharePriceInr: 659, eventNote: "Annual profit reaches ₹70 Cr" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 1580, patCr: 22, revenueCr: 310, patMarginPct: 7.10, sharePriceInr: 718, eventNote: "66kV High voltage cable approvals received" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 1720, patCr: 26, revenueCr: 340, patMarginPct: 7.65, sharePriceInr: 781, eventNote: "EBITDA margins expand past 11%" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 1880, patCr: 29, revenueCr: 375, patMarginPct: 7.73, sharePriceInr: 854, eventNote: "Transmission utilities long-term contract" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 2050, patCr: 34, revenueCr: 415, patMarginPct: 8.19, sharePriceInr: 931, eventNote: "Market cap crosses ₹2,000 Cr; PAT ₹111 Cr" },
-    ],
-  },
-  {
-    id: "elecon",
-    name: "Elecon Engineering Company Ltd",
-    symbol: "ELECON",
-    bseCode: "505700",
-    sector: "Electronics & Industrial",
-    category: "Mid Cap (₹5k - ₹20k Cr)",
-    headquarters: "Anand, Gujarat",
-    founded: 1951,
-    description: "Leading industrial gears and material handling equipment manufacturer supplying defense, cement, steel, power, and international OEM automation.",
-    benchmarks: { peRatio: 31.8, pbRatio: 6.9, dividendYieldPct: 0.60, faceValueInr: 2, fiftyTwoWeekHigh: 1418.0, fiftyTwoWeekLow: 730.0 },
-    quarterlyData: [
-      { quarter: "Q1 FY24", periodEnded: "Jun 2023", financialYear: "FY24", marketCapCr: 8200, patCr: 73, revenueCr: 414, patMarginPct: 17.63, sharePriceInr: 731, eventNote: "Industrial gear division volume surge" },
-      { quarter: "Q2 FY24", periodEnded: "Sep 2023", financialYear: "FY24", marketCapCr: 9400, patCr: 89, revenueCr: 485, patMarginPct: 18.35, sharePriceInr: 838, eventNote: "European overseas business expansion" },
-      { quarter: "Q3 FY24", periodEnded: "Dec 2023", financialYear: "FY24", marketCapCr: 11200, patCr: 90, revenueCr: 474, patMarginPct: 18.99, sharePriceInr: 998, eventNote: "EBITDA margin touches 24%" },
-      { quarter: "Q4 FY24", periodEnded: "Mar 2024", financialYear: "FY24", marketCapCr: 12500, patCr: 104, revenueCr: 565, patMarginPct: 18.41, sharePriceInr: 1114, eventNote: "Annual profit crosses ₹356 Cr" },
-      { quarter: "Q1 FY25", periodEnded: "Jun 2024", financialYear: "FY25", marketCapCr: 14800, patCr: 88, revenueCr: 440, patMarginPct: 20.00, sharePriceInr: 1319, eventNote: "Stock reaches new 52-week peak" },
-      { quarter: "Q2 FY25", periodEnded: "Sep 2024", financialYear: "FY25", marketCapCr: 13600, patCr: 98, revenueCr: 512, patMarginPct: 19.14, sharePriceInr: 1212, eventNote: "Defense marine gearbox supplies grow" },
-      { quarter: "Q3 FY25", periodEnded: "Dec 2024", financialYear: "FY25", marketCapCr: 13100, patCr: 105, revenueCr: 535, patMarginPct: 19.63, sharePriceInr: 1167, eventNote: "Material handling order intake up 22%" },
-      { quarter: "Q4 FY25", periodEnded: "Mar 2025", financialYear: "FY25", marketCapCr: 14200, patCr: 122, revenueCr: 630, patMarginPct: 19.37, sharePriceInr: 1265, eventNote: "FY25 Net profit scales to ₹413 Cr" },
-      { quarter: "Q1 FY26", periodEnded: "Jun 2025", financialYear: "FY26", marketCapCr: 15400, patCr: 118, revenueCr: 570, patMarginPct: 20.70, sharePriceInr: 1372, eventNote: "Export orders in US cement and mining" },
-      { quarter: "Q2 FY26", periodEnded: "Sep 2025", financialYear: "FY26", marketCapCr: 16500, patCr: 132, revenueCr: 640, patMarginPct: 20.62, sharePriceInr: 1470, eventNote: "Capacity utilization reaches 88%" },
-      { quarter: "Q3 FY26", periodEnded: "Dec 2025", financialYear: "FY26", marketCapCr: 17800, patCr: 145, revenueCr: 690, patMarginPct: 21.01, sharePriceInr: 1586, eventNote: "Order book crosses ₹1,800 Cr" },
-      { quarter: "Q4 FY26", periodEnded: "Mar 2026", financialYear: "FY26", marketCapCr: 19200, patCr: 168, revenueCr: 780, patMarginPct: 21.54, sharePriceInr: 1711, eventNote: "Full year FY26 PAT approaches ₹560 Cr" },
-    ],
-  },
+  // ==================== CONSUMER & RETAIL ====================
+  createCompany(
+    "itc", "ITC Ltd", "ITC", "500875",
+    "FMCG", "Cigarettes, FMCG Foods & Agri", "Mega Cap (> ₹1 Lakh Cr)",
+    "Kolkata, West Bengal", ["HINDUNILVR", "NESTLEIND", "BRITANNIA", "DABUR"],
+    { peRatio: 28.1, pbRatio: 8.6, dividendYieldPct: 2.85, fiftyTwoWeekHigh: 528.5, fiftyTwoWeekLow: 399.3 },
+    { mcap: [310000, 475000, 540000, 625000, 780000], pat: [15503, 19428, 20459, 22400, 25800], rev: [60668, 70919, 76840, 82000, 91000], price: [250, 383, 432, 500, 625] },
+    {
+      mcap: [560000, 550000, 580000, 540000, 548000, 652000, 612000, 625000, 672000, 692000, 748000, 780000],
+      pat: [4903, 4927, 5572, 5020, 5091, 5242, 5410, 5640, 5930, 6230, 6620, 7010],
+      rev: [16995, 17774, 18018, 17752, 18220, 18980, 19600, 20350, 21250, 22100, 23200, 24300],
+      price: [450, 442, 465, 432, 439, 522, 490, 500, 538, 554, 599, 625]
+    }
+  ),
+  createCompany(
+    "trent", "Trent Ltd", "TRENT", "500251",
+    "Consumer & Retail", "Apparel & Fast Fashion Retail", "Mega Cap (> ₹1 Lakh Cr)",
+    "Mumbai, Maharashtra", ["TITAN", "DMART", "VBL"],
+    { peRatio: 112.5, pbRatio: 38.4, dividendYieldPct: 0.08, fiftyTwoWeekHigh: 8345.0, fiftyTwoWeekLow: 2320.0 },
+    { mcap: [45000, 48000, 140000, 250000, 340000], pat: [106, 394, 1477, 2450, 3350], rev: [4498, 8242, 12664, 19100, 26800], price: [1265, 1350, 3940, 7030, 9560] },
+    {
+      mcap: [62000, 75000, 108000, 140000, 200000, 285000, 265000, 250000, 275000, 295000, 320000, 340000],
+      pat: [167, 228, 374, 712, 423, 512, 585, 640, 710, 795, 885, 960],
+      rev: [2628, 2982, 3467, 3298, 4104, 4680, 5200, 5450, 5950, 6500, 7150, 7500],
+      price: [1740, 2110, 3040, 3940, 5630, 8020, 7450, 7030, 7730, 8290, 9000, 9560]
+    }
+  ),
+
+  // ==================== AUTOMOTIVE & MOBILITY ====================
+  createCompany(
+    "tatamotors", "Tata Motors Ltd", "TATAMOTORS", "500570",
+    "Automotive", "Commercial & Electric Vehicles", "Mega Cap (> ₹1 Lakh Cr)",
+    "Mumbai, Maharashtra", ["MARUTI", "M&M", "BAJAJ-AUTO", "HEROMOTOCO"],
+    { peRatio: 10.4, pbRatio: 3.1, dividendYieldPct: 0.72, fiftyTwoWeekHigh: 1179.0, fiftyTwoWeekLow: 690.0 },
+    { mcap: [165000, 155000, 335000, 335000, 505000], pat: [-11309, 2690, 31807, 24500, 33500], rev: [278454, 345967, 437928, 452000, 510000], price: [433, 420, 1008, 1008, 1519] },
+    {
+      mcap: [215000, 235000, 280000, 335000, 330000, 325000, 305000, 335000, 378000, 398000, 460000, 505000],
+      pat: [3301, 3832, 7145, 17407, 5566, 3450, 4100, 4850, 5430, 6010, 6780, 7520],
+      rev: [102236, 105128, 110577, 119986, 108048, 101450, 107200, 113400, 118400, 123100, 129800, 136000],
+      price: [645, 705, 840, 1008, 993, 978, 917, 1008, 1137, 1197, 1383, 1519]
+    }
+  ),
+
+  // ==================== PHARMACEUTICALS & HEALTHCARE ====================
+  createCompany(
+    "sunpharma", "Sun Pharmaceutical Industries Ltd", "SUNPHARMA", "524715",
+    "Healthcare", "Specialty Generics & Formulations", "Mega Cap (> ₹1 Lakh Cr)",
+    "Mumbai, Maharashtra", ["DRREDDY", "CIPLA", "DIVISLAB", "MANKIND"],
+    { peRatio: 37.8, pbRatio: 6.2, dividendYieldPct: 0.75, fiftyTwoWeekHigh: 1960.0, fiftyTwoWeekLow: 1180.0 },
+    { mcap: [220000, 235000, 365000, 482000, 642000], pat: [3406, 8513, 9680, 13200, 17200], rev: [38654, 43886, 48497, 55200, 66400], price: [915, 980, 1520, 2010, 2677] },
+    {
+      mcap: [245000, 275000, 310000, 365000, 388000, 458000, 468000, 482000, 528000, 548000, 605000, 642000],
+      pat: [2022, 2375, 2524, 2654, 2835, 3040, 3260, 3510, 3790, 4100, 4510, 4910],
+      rev: [11940, 12192, 12380, 11982, 12652, 13420, 14180, 14950, 15850, 16750, 17900, 18900],
+      price: [1022, 1145, 1290, 1520, 1618, 1910, 1952, 2010, 2202, 2285, 2523, 2677]
+    }
+  ),
+  createCompany(
+    "marksans", "Marksans Pharma Ltd", "MARKSANS", "532482",
+    "Healthcare", "Formulations & Softgel Manufacturing", "Mid Cap (₹5k - ₹20k Cr)",
+    "Mumbai, Maharashtra", ["SUNPHARMA", "DRREDDY", "GRANULES"],
+    { peRatio: 26.4, pbRatio: 4.1, dividendYieldPct: 0.35, fiftyTwoWeekHigh: 338.0, fiftyTwoWeekLow: 132.0 },
+    { mcap: [2100, 2900, 7600, 13500, 17800], pat: [187, 265, 315, 410, 570], rev: [1490, 1852, 2177, 2680, 3350], price: [51, 68, 167, 296, 390] },
+    {
+      mcap: [4200, 5100, 7200, 7600, 9800, 12500, 14200, 13500, 14800, 15600, 16500, 17800],
+      pat: [71, 83, 83, 78, 89, 97, 108, 116, 124, 135, 148, 162],
+      rev: [500, 531, 586, 560, 610, 648, 690, 720, 760, 810, 865, 920],
+      price: [92, 112, 158, 167, 215, 274, 312, 296, 325, 342, 362, 390]
+    }
+  ),
+
+  // ==================== ELECTRONICS, HARDWARE & INFRASTRUCTURE ====================
+  createCompany(
+    "lt", "Larsen & Toubro Ltd", "LT", "500510",
+    "Infrastructure", "Engineering, Construction & Mega Projects", "Mega Cap (> ₹1 Lakh Cr)",
+    "Mumbai, Maharashtra", ["BEL", "HAL", "BHEL", "SIEMENS"],
+    { peRatio: 33.1, pbRatio: 5.4, dividendYieldPct: 0.78, fiftyTwoWeekHigh: 3948.6, fiftyTwoWeekLow: 2824.0 },
+    { mcap: [248000, 305000, 504000, 568000, 770000], pat: [10291, 12625, 15543, 19200, 24500], rev: [156521, 183341, 221113, 255000, 305000], price: [1765, 2165, 3665, 4130, 5600] },
+    {
+      mcap: [345000, 415000, 485000, 504000, 512000, 522000, 538000, 568000, 625000, 645000, 720000, 770000],
+      pat: [2493, 3223, 2947, 4396, 2786, 3395, 3820, 4890, 5280, 5720, 6310, 7050],
+      rev: [47882, 51024, 55128, 67079, 55120, 61555, 65100, 72800, 76600, 80200, 84400, 89200],
+      price: [2510, 3020, 3530, 3665, 3723, 3796, 3912, 4130, 4545, 4690, 5236, 5600]
+    }
+  ),
+  createCompany(
+    "bel", "Bharat Electronics Ltd", "BEL", "500049",
+    "Electronics & Industrial", "Defense Electronics & Radars", "Mega Cap (> ₹1 Lakh Cr)",
+    "Bengaluru, Karnataka", ["HAL", "BHEL", "LT", "POLYCAB"],
+    { peRatio: 48.2, pbRatio: 11.5, dividendYieldPct: 0.72, fiftyTwoWeekHigh: 340.5, fiftyTwoWeekLow: 127.0 },
+    { mcap: [52000, 71000, 172000, 235000, 295000], pat: [2349, 2984, 4020, 5200, 6900], rev: [15314, 17734, 20268, 24500, 31000], price: [71, 97, 235, 321, 404] },
+    {
+      mcap: [92000, 102000, 135000, 172000, 226000, 218000, 210000, 235000, 245000, 260000, 275000, 295000],
+      pat: [531, 812, 859, 1784, 776, 1091, 1180, 2240, 1120, 1450, 1580, 2750],
+      rev: [3511, 3993, 4162, 8564, 4199, 4583, 4850, 9800, 5200, 5650, 6100, 11200],
+      price: [126, 140, 185, 235, 309, 298, 287, 321, 335, 356, 376, 404]
+    }
+  ),
+  createCompany(
+    "polycab", "Polycab India Ltd", "POLYCAB", "542652",
+    "Electronics & Industrial", "Power Cables & Fast Moving Electrical Goods", "Mega Cap (> ₹1 Lakh Cr)",
+    "Mumbai, Maharashtra", ["HAVELLS", "KEI", "DYCL", "ELECON"],
+    { peRatio: 42.1, pbRatio: 9.3, dividendYieldPct: 0.52, fiftyTwoWeekHigh: 7330.0, fiftyTwoWeekLow: 3812.0 },
+    { mcap: [36000, 44000, 84000, 110000, 138000], pat: [917, 1282, 1803, 2150, 2590], rev: [12204, 14108, 18039, 21800, 26800], price: [2400, 2930, 5590, 7320, 9180] },
+    {
+      mcap: [64000, 79000, 65000, 84000, 105000, 108000, 102000, 110000, 118000, 122000, 130000, 138000],
+      pat: [403, 430, 417, 553, 401, 440, 495, 620, 540, 595, 660, 780],
+      rev: [3889, 4218, 4340, 5592, 4698, 5498, 5750, 6850, 5800, 6450, 6950, 8100],
+      price: [4260, 5260, 4330, 5590, 6990, 7180, 6790, 7320, 7850, 8120, 8650, 9180]
+    }
+  ),
+  createCompany(
+    "elecon", "Elecon Engineering Ltd", "ELECON", "505700",
+    "Electronics & Industrial", "Industrial Gears & Heavy Machinery", "Mid Cap (₹5k - ₹20k Cr)",
+    "Anand, Gujarat", ["POLYCAB", "DYCL", "LT"],
+    { peRatio: 31.8, pbRatio: 6.9, dividendYieldPct: 0.60, fiftyTwoWeekHigh: 1418.0, fiftyTwoWeekLow: 730.0 },
+    { mcap: [2100, 4200, 12500, 14200, 19200], pat: [140, 237, 356, 413, 560], rev: [1211, 1529, 1937, 2150, 2680], price: [187, 374, 1114, 1265, 1711] },
+    {
+      mcap: [8200, 9400, 11200, 12500, 14800, 13600, 13100, 14200, 15400, 16500, 17800, 19200],
+      pat: [73, 89, 90, 104, 88, 98, 105, 122, 118, 132, 145, 168],
+      rev: [414, 485, 474, 565, 440, 512, 535, 630, 570, 640, 690, 780],
+      price: [731, 838, 998, 1114, 1319, 1212, 1167, 1265, 1372, 1470, 1586, 1711]
+    }
+  ),
+  createCompany(
+    "dynamiccables", "Dynamic Cables Ltd", "DYCL", "540795",
+    "Electronics & Industrial", "Power Cables & Railway Conductors", "Small Cap (₹500 Cr - ₹5k Cr)",
+    "Jaipur, Rajasthan", ["POLYCAB", "ELECON"],
+    { peRatio: 28.5, pbRatio: 4.6, dividendYieldPct: 0.28, fiftyTwoWeekHigh: 685.0, fiftyTwoWeekLow: 280.0 },
+    { mcap: [280, 410, 1100, 1450, 2050], pat: [14, 31, 48, 70, 111], rev: [564, 668, 837, 1045, 1440], price: [127, 186, 500, 659, 931] },
+    {
+      mcap: [850, 1050, 1180, 1100, 1320, 1480, 1380, 1450, 1580, 1720, 1880, 2050],
+      pat: [9, 11, 13, 15, 14, 17, 18, 21, 22, 26, 29, 34],
+      rev: [181, 202, 218, 236, 228, 254, 268, 295, 310, 340, 375, 415],
+      price: [386, 477, 536, 500, 600, 672, 627, 659, 718, 781, 854, 931]
+    }
+  ),
+
+  // ==================== TELECOM SERVICES ====================
+  createCompany(
+    "bhartiartl", "Bharti Airtel Ltd", "BHARTIARTL", "532454",
+    "Telecom", "Telecommunications & Digital Services", "Mega Cap (> ₹1 Lakh Cr)",
+    "New Delhi, Delhi", ["RELIANCE", "TATAPOWER"],
+    { peRatio: 52.3, pbRatio: 7.9, dividendYieldPct: 0.65, fiftyTwoWeekHigh: 1779.0, fiftyTwoWeekLow: 1115.0 },
+    { mcap: [425000, 445000, 752000, 1075000, 1410000], pat: [4255, 8346, 7467, 15993, 24800], rev: [116547, 139145, 149982, 172000, 201000], price: [740, 750, 1260, 1805, 2367] },
+    {
+      mcap: [502000, 535000, 595000, 752000, 855000, 980000, 1020000, 1075000, 1170000, 1215000, 1335000, 1410000],
+      pat: [1612, 1341, 2442, 2072, 4160, 3593, 4320, 4920, 5410, 5880, 6420, 7120],
+      rev: [37440, 37044, 37900, 37599, 38800, 41100, 43200, 45200, 47100, 49100, 51400, 53600],
+      price: [875, 928, 1032, 1260, 1435, 1645, 1712, 1805, 1965, 2039, 2241, 2367]
+    }
+  ),
 ];
-
-// Composite Benchmark of All >₹500 Cr Companies
-export const AGGREGATE_500CR_BENCHMARK: IndianCompany = {
-  id: "aggregate_500cr",
-  name: "All Listed Companies > ₹500 Cr (Aggregate Index)",
-  symbol: "BHARAT-500CR-COMPOSITE",
-  bseCode: "999500",
-  sector: "Conglomerate",
-  category: "Mega Cap (> ₹1 Lakh Cr)",
-  headquarters: "Mumbai (NSE/BSE All >500 Cr)",
-  founded: 1990,
-  description: "Comprehensive aggregate quarterly performance index tracking all analyzed publicly listed Indian companies with Market Capitalization above ₹500 Crores.",
-  benchmarks: {
-    peRatio: 23.4,
-    pbRatio: 4.2,
-    dividendYieldPct: 1.35,
-    faceValueInr: 10,
-    fiftyTwoWeekHigh: 26500.0,
-    fiftyTwoWeekLow: 21000.0,
-  },
-  quarterlyData: QUARTER_LABELS.map((q, idx) => {
-    const sumMcap = ALL_INDIAN_COMPANIES.reduce((acc, c) => acc + c.quarterlyData[idx].marketCapCr, 0);
-    const sumPat = ALL_INDIAN_COMPANIES.reduce((acc, c) => acc + c.quarterlyData[idx].patCr, 0);
-    const sumRev = ALL_INDIAN_COMPANIES.reduce((acc, c) => acc + c.quarterlyData[idx].revenueCr, 0);
-    return {
-      quarter: q.quarter,
-      periodEnded: q.periodEnded,
-      financialYear: q.financialYear,
-      marketCapCr: sumMcap,
-      patCr: sumPat,
-      revenueCr: sumRev,
-      patMarginPct: Number(((sumPat / sumRev) * 100).toFixed(2)),
-      sharePriceInr: Number((sumMcap / 85000).toFixed(1)),
-      eventNote: idx === 0 ? "FY24 start aggregate across >500 Cr companies" : (idx === 7 ? "FY25 full-year corporate earnings completion" : (idx === 11 ? "FY26 corporate earnings peak" : undefined)),
-    };
-  }),
-};

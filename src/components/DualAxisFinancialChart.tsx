@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, useId } from 'react';
-import { QuarterlyRecord } from '../data/indianCompanies';
+import { PeriodRecord } from '../data/indianCompanies';
 import { formatInrCrores, formatInrCompact, formatPercentage } from '../utils/formatters';
 import { 
   TrendingUp, 
@@ -12,17 +12,17 @@ import {
   Maximize2, 
   Download, 
   Info,
-  Calendar,
+  Calendar
 } from 'lucide-react';
 
 interface DualAxisFinancialChartProps {
   companyName: string;
   symbol: string;
   sector: string;
-  category: string;
-  data: QuarterlyRecord[];
-  timeframe: '4Q' | '8Q' | '12Q';
-  onTimeframeChange: (tf: '4Q' | '8Q' | '12Q') => void;
+  periodType: 'quarterly' | 'yearly';
+  onPeriodTypeChange: (type: 'quarterly' | 'yearly') => void;
+  quarterlyData: PeriodRecord[];
+  yearlyData: PeriodRecord[];
 }
 
 export type ChartMode = 'dual-line' | 'bar-line' | 'normalized';
@@ -31,13 +31,14 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
   companyName,
   symbol,
   sector,
-  category,
-  data,
-  timeframe,
-  onTimeframeChange,
+  periodType,
+  onPeriodTypeChange,
+  quarterlyData,
+  yearlyData,
 }) => {
   const chartId = useId();
   const [chartMode, setChartMode] = useState<ChartMode>('dual-line');
+  const [quarterRange, setQuarterRange] = useState<'4Q' | '8Q' | '12Q'>('12Q');
   const [showMarketCap, setShowMarketCap] = useState(true);
   const [showPat, setShowPat] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
@@ -45,19 +46,21 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
   const [isTooltipLocked, setIsTooltipLocked] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
-  // Filter data according to selected timeframe (4Q = 1 Year, 8Q = 2 Years, 12Q = 3 Years)
-  const filteredData = React.useMemo(() => {
-    const countMap: Record<string, number> = { '4Q': 4, '8Q': 8, '12Q': 12 };
-    const count = countMap[timeframe] || 12;
-    return data.slice(-count);
-  }, [data, timeframe]);
+  // Active dataset based on Quarterly vs Yearly selection
+  const rawData = periodType === 'quarterly' ? quarterlyData : yearlyData;
 
-  // Selected or latest record
+  const filteredData = React.useMemo(() => {
+    if (periodType === 'yearly') return rawData;
+    const countMap: Record<string, number> = { '4Q': 4, '8Q': 8, '12Q': 12 };
+    const count = countMap[quarterRange] || 12;
+    return rawData.slice(-count);
+  }, [rawData, periodType, quarterRange]);
+
   const activeRecord = hoveredIdx !== null && filteredData[hoveredIdx] 
     ? filteredData[hoveredIdx] 
     : filteredData[filteredData.length - 1];
 
-  // Calculate scales and bounds
+  // Scales & Bounds
   const marketCapValues = filteredData.map(d => d.marketCapCr);
   const patValues = filteredData.map(d => d.patCr);
 
@@ -73,24 +76,22 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
   const patMin = Math.max(0, rawPatMin - patPadding);
   const patMax = rawPatMax + patPadding;
 
-  // Normalized baseline growth (% change from start quarter)
+  // Normalized comparison baseline
   const baseMcap = filteredData[0]?.marketCapCr || 1;
   const basePat = filteredData[0]?.patCr || 1;
-
   const normMcapValues = filteredData.map(d => ((d.marketCapCr - baseMcap) / baseMcap) * 100);
   const normPatValues = filteredData.map(d => ((d.patCr - basePat) / basePat) * 100);
   const allNormValues = [...normMcapValues, ...normPatValues];
   const normMin = Math.min(-5, Math.floor(Math.min(...allNormValues) - 5));
   const normMax = Math.max(10, Math.ceil(Math.max(...allNormValues) + 5));
 
-  // Chart dimensions
+  // Canvas Geometry
   const width = 1000;
-  const height = 440;
-  const margin = { top: 32, right: 95, bottom: 56, left: 100 };
+  const height = 430;
+  const margin = { top: 28, right: 90, bottom: 48, left: 95 };
   const innerWidth = width - margin.left - margin.right;
   const innerHeight = height - margin.top - margin.bottom;
 
-  // Coordinate mappers
   const getX = (index: number) => {
     if (filteredData.length <= 1) return margin.left + innerWidth / 2;
     return margin.left + (index / (filteredData.length - 1)) * innerWidth;
@@ -112,11 +113,9 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
     return margin.top + innerHeight - ((val - patMin) / (patMax - patMin)) * innerHeight;
   };
 
-  // Generate SVG path coordinates
   const mcapPoints = filteredData.map((d, i) => ({ x: getX(i), y: getYMarketCap(d.marketCapCr) }));
   const patPoints = filteredData.map((d, i) => ({ x: getX(i), y: getYPat(d.patCr) }));
 
-  // Smooth Bezier Curve generator
   const createSmoothPath = (points: { x: number; y: number }[]) => {
     if (points.length === 0) return '';
     if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
@@ -140,17 +139,14 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
   const mcapPathString = createSmoothPath(mcapPoints);
   const patPathString = createSmoothPath(patPoints);
 
-  // Closed area under market cap
   const mcapAreaString = mcapPoints.length > 0
     ? `${mcapPathString} L ${mcapPoints[mcapPoints.length - 1].x.toFixed(1)} ${(margin.top + innerHeight).toFixed(1)} L ${mcapPoints[0].x.toFixed(1)} ${(margin.top + innerHeight).toFixed(1)} Z`
     : '';
 
-  // Closed area under PAT
   const patAreaString = patPoints.length > 0
     ? `${patPathString} L ${patPoints[patPoints.length - 1].x.toFixed(1)} ${(margin.top + innerHeight).toFixed(1)} L ${patPoints[0].x.toFixed(1)} ${(margin.top + innerHeight).toFixed(1)} Z`
     : '';
 
-  // Ticks
   const numTicks = 5;
   const mcapTicks = Array.from({ length: numTicks }, (_, i) => {
     const val = mcapMin + (i / (numTicks - 1)) * (mcapMax - mcapMin);
@@ -168,10 +164,8 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
     return { val, y };
   });
 
-  // Handle pointer scrub
   const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (isTooltipLocked) return;
-    if (!svgRef.current) return;
+    if (isTooltipLocked || !svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
     const clientX = e.clientX - rect.left;
     const svgX = (clientX / rect.width) * width;
@@ -197,100 +191,109 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${symbol}_Quarterly_PAT_MarketCap_Graph.svg`;
+    link.download = `${symbol}_${periodType}_Graph.svg`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // Delta calculations
   const firstItem = filteredData[0];
   const lastItem = filteredData[filteredData.length - 1];
   const mcapDeltaPct = firstItem && lastItem ? ((lastItem.marketCapCr - firstItem.marketCapCr) / firstItem.marketCapCr) * 100 : 0;
   const patDeltaPct = firstItem && lastItem ? ((lastItem.patCr - firstItem.patCr) / firstItem.patCr) * 100 : 0;
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 md:p-6 shadow-2xl relative overflow-hidden">
-      {/* Top Toolbar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-slate-800/80">
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-2xl relative">
+      {/* Top Controls Toolbar */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800">
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
               <span>{companyName}</span>
-              <span className="text-xs font-mono px-2 py-0.5 rounded bg-blue-950/70 border border-blue-800/80 text-blue-300">
-                NSE: {symbol}
+              <span className="text-xs font-mono px-2 py-0.5 rounded bg-blue-950 border border-blue-800/80 text-blue-300">
+                {symbol}
               </span>
             </h2>
           </div>
-          <p className="text-xs text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
-            <span>{category}</span>
+          <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
+            <span>{sector}</span>
             <span aria-hidden="true">·</span>
-            <span>{sector} Sector</span>
-            <span aria-hidden="true">·</span>
-            <span className="text-slate-300 font-medium">X-Axis: Quarterly Reporting</span>
-            <span aria-hidden="true">·</span>
-            <span className="text-blue-400 font-semibold">Blue Y-Axis: Market Cap</span>
-            <span aria-hidden="true">·</span>
-            <span className="text-emerald-400 font-semibold">Green Y-Axis: PAT (Profit After Tax)</span>
-          </p>
+            <span className="capitalize">{periodType} Frequency</span>
+          </div>
         </div>
 
         {/* Toolbar Controls */}
         <div className="flex flex-wrap items-center gap-3">
-          {/* Timeframe selector (Quarters) */}
-          <div className="flex items-center bg-slate-950/80 p-1 rounded-lg border border-slate-800">
-            {(['4Q', '8Q', '12Q'] as const).map(tf => {
-              const labelMap = { '4Q': '4 Quarters (1Y)', '8Q': '8 Quarters (2Y)', '12Q': '12 Quarters (3Y)' };
-              return (
-                <button
-                  key={tf}
-                  onClick={() => onTimeframeChange(tf)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
-                    timeframe === tf
-                      ? 'bg-blue-600 text-white shadow-sm font-semibold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                  }`}
-                  title={labelMap[tf]}
-                >
-                  {tf}
-                </button>
-              );
-            })}
+          {/* YEARLY VS QUARTERLY TOGGLE (User Request 2) */}
+          <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs font-semibold">
+            <button
+              onClick={() => onPeriodTypeChange('quarterly')}
+              className={`px-3 py-1.5 rounded-md transition-all ${
+                periodType === 'quarterly'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Quarterly
+            </button>
+            <button
+              onClick={() => onPeriodTypeChange('yearly')}
+              className={`px-3 py-1.5 rounded-md transition-all ${
+                periodType === 'yearly'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Yearly (Annual)
+            </button>
           </div>
 
-          {/* Chart Display Mode */}
-          <div className="flex items-center bg-slate-950/80 p-1 rounded-lg border border-slate-800">
+          {/* Sub-Range for Quarterly */}
+          {periodType === 'quarterly' && (
+            <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+              {(['4Q', '8Q', '12Q'] as const).map(q => (
+                <button
+                  key={q}
+                  onClick={() => setQuarterRange(q)}
+                  className={`px-2.5 py-1.5 rounded-md transition-all ${
+                    quarterRange === q
+                      ? 'bg-slate-800 text-white font-semibold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Display Mode */}
+          <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
             <button
               onClick={() => setChartMode('dual-line')}
-              title="Dual Line Curves"
-              className={`px-2.5 py-1.5 text-xs rounded-md transition-all flex items-center gap-1.5 ${
-                chartMode === 'dual-line'
-                  ? 'bg-slate-800 text-white font-medium shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+              title="Dual Line"
+              className={`px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
+                chartMode === 'dual-line' ? 'bg-slate-800 text-white font-medium' : 'text-slate-400 hover:text-white'
               }`}
             >
               <TrendingUp className="w-3.5 h-3.5 text-blue-400" />
-              <span>Dual Line</span>
+              <span>Line</span>
             </button>
             <button
               onClick={() => setChartMode('bar-line')}
-              title="PAT Bars (Green) + Market Cap Line (Blue)"
-              className={`px-2.5 py-1.5 text-xs rounded-md transition-all flex items-center gap-1.5 ${
-                chartMode === 'bar-line'
-                  ? 'bg-slate-800 text-white font-medium shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+              title="PAT Bars + Market Cap Line"
+              className={`px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
+                chartMode === 'bar-line' ? 'bg-slate-800 text-white font-medium' : 'text-slate-400 hover:text-white'
               }`}
             >
               <BarChart2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Quarterly Bars + Line</span>
+              <span>Bars + Line</span>
             </button>
             <button
               onClick={() => setChartMode('normalized')}
-              title="Normalized % Growth"
-              className={`px-2.5 py-1.5 text-xs rounded-md transition-all flex items-center gap-1.5 ${
-                chartMode === 'normalized'
-                  ? 'bg-slate-800 text-white font-medium shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+              title="Normalized Growth"
+              className={`px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
+                chartMode === 'normalized' ? 'bg-slate-800 text-white font-medium' : 'text-slate-400 hover:text-white'
               }`}
             >
               <Maximize2 className="w-3.5 h-3.5 text-purple-400" />
@@ -298,67 +301,63 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
             </button>
           </div>
 
-          {/* Export SVG */}
           <button
             onClick={handleExportSvg}
-            className="p-2 text-slate-400 hover:text-white bg-slate-950/80 hover:bg-slate-800 border border-slate-800 rounded-lg transition-colors"
-            title="Export High-Resolution Vector Chart"
+            className="p-2 text-slate-400 hover:text-white bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-lg transition-colors"
+            title="Export SVG"
           >
             <Download className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* Series Toggles & Legend Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 pb-2 text-xs">
-        <div className="flex items-center gap-4">
-          {/* Blue Market Cap Legend Button */}
+      {/* Clean Interactive Legend Buttons */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 pb-1 text-xs">
+        <div className="flex items-center gap-3">
           <button
             onClick={() => setShowMarketCap(!showMarketCap)}
             className={`flex items-center gap-2 px-2.5 py-1 rounded transition-colors border ${
               showMarketCap
-                ? 'bg-blue-950/40 border-blue-800/80 text-blue-200'
-                : 'bg-slate-950 border-slate-800 text-slate-500 opacity-60'
+                ? 'bg-blue-950/40 border-blue-800/80 text-blue-300'
+                : 'bg-slate-950 border-slate-800 text-slate-500 opacity-50'
             }`}
           >
-            <span className="w-3 h-3 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50 inline-block" />
-            <span className="font-semibold">Market Cap (Blue Y-Axis)</span>
-            <span className="font-mono text-blue-400">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm" />
+            <span className="font-semibold">Market Cap</span>
+            <span className="font-mono text-blue-400 font-bold">
               {formatInrCrores(activeRecord?.marketCapCr || 0, true)}
             </span>
           </button>
 
-          {/* Green PAT Legend Button */}
           <button
             onClick={() => setShowPat(!showPat)}
             className={`flex items-center gap-2 px-2.5 py-1 rounded transition-colors border ${
               showPat
-                ? 'bg-emerald-950/40 border-emerald-800/80 text-emerald-200'
-                : 'bg-slate-950 border-slate-800 text-slate-500 opacity-60'
+                ? 'bg-emerald-950/40 border-emerald-800/80 text-emerald-300'
+                : 'bg-slate-950 border-slate-800 text-slate-500 opacity-50'
             }`}
           >
-            <span className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50 inline-block" />
-            <span className="font-semibold">Quarterly PAT (Green Y-Axis)</span>
-            <span className="font-mono text-emerald-400">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm" />
+            <span className="font-semibold">PAT (Net Profit)</span>
+            <span className="font-mono text-emerald-400 font-bold">
               {formatInrCrores(activeRecord?.patCr || 0, false)}
             </span>
           </button>
         </div>
 
-        {/* Quick Insights in Header */}
-        <div className="hidden sm:flex items-center gap-3 text-slate-400">
-          <span>{timeframe} Trajectory:</span>
-          <span className={`font-mono font-medium ${mcapDeltaPct >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>
+        <div className="hidden sm:flex items-center gap-3 text-slate-400 font-mono text-xs">
+          <span>Change:</span>
+          <span className={mcapDeltaPct >= 0 ? 'text-blue-400' : 'text-rose-400'}>
             M-Cap {formatPercentage(mcapDeltaPct)}
           </span>
           <span className="text-slate-600">·</span>
-          <span className={`font-mono font-medium ${patDeltaPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+          <span className={patDeltaPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
             PAT {formatPercentage(patDeltaPct)}
           </span>
         </div>
       </div>
 
-      {/* Main SVG Chart Container */}
+      {/* Main SVG Canvas */}
       <div className="relative mt-2 w-full select-none">
         <svg
           ref={svgRef}
@@ -371,48 +370,42 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
           onClick={() => setIsTooltipLocked(!isTooltipLocked)}
         >
           <defs>
-            {/* Blue Gradient for Market Cap */}
             <linearGradient id={`${chartId}-blue-grad`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.38" />
-              <stop offset="60%" stopColor="#1d4ed8" stopOpacity="0.12" />
+              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.35" />
               <stop offset="100%" stopColor="#1e3a8a" stopOpacity="0.0" />
             </linearGradient>
 
-            {/* Green Gradient for PAT */}
             <linearGradient id={`${chartId}-green-grad`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#10b981" stopOpacity="0.35" />
-              <stop offset="70%" stopColor="#059669" stopOpacity="0.08" />
+              <stop offset="0%" stopColor="#10b981" stopOpacity="0.32" />
               <stop offset="100%" stopColor="#047857" stopOpacity="0.0" />
             </linearGradient>
 
-            {/* Green Bar Gradient */}
             <linearGradient id={`${chartId}-bar-grad`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#34d399" stopOpacity="0.9" />
               <stop offset="100%" stopColor="#059669" stopOpacity="0.5" />
             </linearGradient>
 
-            {/* Glow Filter */}
             <filter id={`${chartId}-glow`} x="-20%" y="-20%" width="140%" height="140%">
               <feGaussianBlur stdDeviation="3" result="blur" />
               <feComposite in="SourceGraphic" in2="blur" operator="over" />
             </filter>
           </defs>
 
-          {/* Background Inner Canvas Box */}
+          {/* Background canvas */}
           <rect
             x={margin.left}
             y={margin.top}
             width={innerWidth}
             height={innerHeight}
-            fill="#0b0f19"
+            fill="#090d16"
             stroke="#1e293b"
             strokeWidth="1"
             rx="4"
           />
 
-          {/* Horizontal Gridlines */}
+          {/* Grid lines */}
           {showGrid && (
-            <g className="grid-lines" opacity="0.65">
+            <g opacity="0.6">
               {mcapTicks.map((tick, i) => (
                 <line
                   key={`hgrid-${i}`}
@@ -421,38 +414,26 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                   x2={margin.left + innerWidth}
                   y2={tick.y}
                   stroke="#1e293b"
-                  strokeWidth="1"
                   strokeDasharray="3 3"
+                />
+              ))}
+              {filteredData.map((_, i) => (
+                <line
+                  key={`vgrid-${i}`}
+                  x1={getX(i)}
+                  y1={margin.top}
+                  x2={getX(i)}
+                  y2={margin.top + innerHeight}
+                  stroke="#1e293b"
+                  strokeDasharray="2 4"
                 />
               ))}
             </g>
           )}
 
-          {/* Vertical Gridlines (each Quarter) */}
-          {showGrid && (
-            <g className="vertical-grid-lines" opacity="0.4">
-              {filteredData.map((_, i) => {
-                const x = getX(i);
-                return (
-                  <line
-                    key={`vgrid-${i}`}
-                    x1={x}
-                    y1={margin.top}
-                    x2={x}
-                    y2={margin.top + innerHeight}
-                    stroke="#1e293b"
-                    strokeWidth="1"
-                    strokeDasharray="2 4"
-                  />
-                );
-              })}
-            </g>
-          )}
-
-          {/* ================= LEFT Y-AXIS (BLUE: MARKET CAP) ================= */}
+          {/* LEFT Y-AXIS (BLUE: Market Cap) */}
           {showMarketCap && (
             <g className="y-axis-left">
-              {/* Blue Left Axis Line */}
               <line
                 x1={margin.left}
                 y1={margin.top}
@@ -461,33 +442,27 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                 stroke="#3b82f6"
                 strokeWidth="2"
               />
-
-              {/* Blue Y-Axis Title Label */}
               <text
                 x={-((margin.top + innerHeight) / 2)}
-                y={20}
+                y={22}
                 transform="rotate(-90)"
                 textAnchor="middle"
                 fill="#60a5fa"
                 fontSize="11"
                 fontWeight="700"
-                letterSpacing="0.04em"
                 className="font-mono uppercase tracking-wider"
               >
-                {chartMode === 'normalized' ? 'Market Cap (% Change)' : 'Market Capitalisation (₹)'}
+                Market Cap (₹)
               </text>
-
-              {/* Blue Ticks and Values */}
               {(chartMode === 'normalized' ? normTicks : mcapTicks).map((t, idx) => (
                 <g key={`mcap-tick-${idx}`} transform={`translate(${margin.left}, ${t.y})`}>
                   <line x1="-5" y1="0" x2="0" y2="0" stroke="#3b82f6" strokeWidth="1.5" />
                   <text
-                    x="-10"
+                    x="-9"
                     y="3.5"
                     textAnchor="end"
                     fill="#93c5fd"
                     fontSize="10"
-                    fontWeight="500"
                     className="font-mono tabular-nums"
                   >
                     {chartMode === 'normalized' 
@@ -499,10 +474,9 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
             </g>
           )}
 
-          {/* ================= RIGHT Y-AXIS (GREEN: PAT) ================= */}
+          {/* RIGHT Y-AXIS (GREEN: PAT) */}
           {showPat && (
             <g className="y-axis-right">
-              {/* Green Right Axis Line */}
               <line
                 x1={margin.left + innerWidth}
                 y1={margin.top}
@@ -511,33 +485,27 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                 stroke="#10b981"
                 strokeWidth="2"
               />
-
-              {/* Green Y-Axis Title Label */}
               <text
                 x={(margin.top + innerHeight) / 2}
-                y={-(width - 20)}
+                y={-(width - 22)}
                 transform="rotate(90)"
                 textAnchor="middle"
                 fill="#34d399"
                 fontSize="11"
                 fontWeight="700"
-                letterSpacing="0.04em"
                 className="font-mono uppercase tracking-wider"
               >
-                {chartMode === 'normalized' ? 'Quarterly PAT (% Change)' : 'Quarterly PAT - Net Profit (₹ Cr)'}
+                PAT Net Profit (₹ Cr)
               </text>
-
-              {/* Green Ticks and Values */}
               {(chartMode === 'normalized' ? normTicks : patTicks).map((t, idx) => (
                 <g key={`pat-tick-${idx}`} transform={`translate(${margin.left + innerWidth}, ${t.y})`}>
                   <line x1="0" y1="0" x2="5" y2="0" stroke="#10b981" strokeWidth="1.5" />
                   <text
-                    x="10"
+                    x="9"
                     y="3.5"
                     textAnchor="start"
                     fill="#6ee7b7"
                     fontSize="10"
-                    fontWeight="500"
                     className="font-mono tabular-nums"
                   >
                     {chartMode === 'normalized'
@@ -549,9 +517,8 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
             </g>
           )}
 
-          {/* ================= X-AXIS (QUARTERS) ================= */}
+          {/* X-AXIS (QUARTERS OR YEARS) */}
           <g className="x-axis" transform={`translate(0, ${margin.top + innerHeight})`}>
-            {/* Baseline */}
             <line
               x1={margin.left}
               y1="0"
@@ -560,67 +527,44 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
               stroke="#334155"
               strokeWidth="1.5"
             />
-
-            {/* Quarter Ticks and Labels */}
             {filteredData.map((d, i) => {
               const x = getX(i);
               return (
-                <g key={`quarter-tick-${i}`} transform={`translate(${x}, 0)`}>
-                  <line x1="0" y1="0" x2="0" y2="6" stroke="#475569" strokeWidth="1" />
-                  
-                  {/* Primary Quarter Label (e.g. Q1 FY25) */}
+                <g key={`period-tick-${i}`} transform={`translate(${x}, 0)`}>
+                  <line x1="0" y1="0" x2="0" y2="5" stroke="#475569" strokeWidth="1" />
                   <text
                     x="0"
-                    y="20"
+                    y="18"
                     textAnchor="middle"
-                    fill={hoveredIdx === i ? '#ffffff' : '#e2e8f0'}
+                    fill={hoveredIdx === i ? '#ffffff' : '#cbd5e1'}
                     fontSize="11"
                     fontWeight={hoveredIdx === i ? '700' : '600'}
-                    className="font-mono transition-colors"
-                  >
-                    {d.quarter}
-                  </text>
-
-                  {/* Period Ended Date (e.g. Jun 2024) */}
-                  <text
-                    x="0"
-                    y="34"
-                    textAnchor="middle"
-                    fill={hoveredIdx === i ? '#93c5fd' : '#64748b'}
-                    fontSize="9"
-                    fontWeight="500"
                     className="font-mono"
                   >
-                    {d.periodEnded}
+                    {d.period}
+                  </text>
+                  <text
+                    x="0"
+                    y="30"
+                    textAnchor="middle"
+                    fill="#64748b"
+                    fontSize="9"
+                    className="font-mono"
+                  >
+                    {d.label}
                   </text>
                 </g>
               );
             })}
-
-            {/* X-Axis Bottom Descriptive Label */}
-            <text
-              x={margin.left + innerWidth / 2}
-              y="50"
-              textAnchor="middle"
-              fill="#64748b"
-              fontSize="10.5"
-              fontWeight="600"
-              letterSpacing="0.05em"
-              className="uppercase tracking-widest"
-            >
-              Timeline (Quarterly Corporate Financial Filings)
-            </text>
           </g>
 
-          {/* ================= DATA VISUALIZATION: BARS OR LINES ================= */}
-
-          {/* Mode 2: BARS FOR PAT (Green) */}
+          {/* PAT BARS (Green) */}
           {chartMode === 'bar-line' && showPat && (
             <g className="pat-bars">
               {filteredData.map((d, i) => {
                 const x = getX(i);
                 const y = getYPat(d.patCr);
-                const barWidth = Math.max(14, Math.min(36, (innerWidth / filteredData.length) * 0.5));
+                const barWidth = Math.max(16, Math.min(45, (innerWidth / filteredData.length) * 0.48));
                 const barHeight = margin.top + innerHeight - y;
                 const isHovered = hoveredIdx === i;
 
@@ -635,7 +579,6 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                     stroke="#10b981"
                     strokeWidth={isHovered ? 2.5 : 1}
                     rx="3"
-                    className="transition-all duration-150"
                     opacity={isHovered ? 1 : 0.88}
                   />
                 );
@@ -643,27 +586,17 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
             </g>
           )}
 
-          {/* Blue Market Cap Area Fill */}
+          {/* Area Fills */}
           {showMarketCap && chartMode !== 'normalized' && (
-            <path
-              d={mcapAreaString}
-              fill={`url(#${chartId}-blue-grad)`}
-              className="pointer-events-none"
-            />
+            <path d={mcapAreaString} fill={`url(#${chartId}-blue-grad)`} className="pointer-events-none" />
           )}
-
-          {/* Green PAT Area Fill (when in dual-line mode) */}
           {showPat && chartMode === 'dual-line' && (
-            <path
-              d={patAreaString}
-              fill={`url(#${chartId}-green-grad)`}
-              className="pointer-events-none"
-            />
+            <path d={patAreaString} fill={`url(#${chartId}-green-grad)`} className="pointer-events-none" />
           )}
 
           {/* BLUE LINE: MARKET CAPITALISATION */}
           {showMarketCap && (
-            <g className="marketcap-series">
+            <g>
               <path
                 d={mcapPathString}
                 fill="none"
@@ -671,34 +604,24 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                 strokeWidth="3"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="filter drop-shadow-[0_2px_8px_rgba(37,99,235,0.4)]"
               />
-
-              {/* Data points for Market Cap */}
-              {filteredData.map((d, i) => {
-                const x = getX(i);
-                const y = getYMarketCap(d.marketCapCr);
-                const isHovered = hoveredIdx === i;
-
-                return (
-                  <circle
-                    key={`mcap-pt-${i}`}
-                    cx={x}
-                    cy={y}
-                    r={isHovered ? 7 : 4.5}
-                    fill="#1d4ed8"
-                    stroke="#93c5fd"
-                    strokeWidth={isHovered ? 3 : 1.5}
-                    className="transition-all duration-150"
-                  />
-                );
-              })}
+              {filteredData.map((d, i) => (
+                <circle
+                  key={`mcap-pt-${i}`}
+                  cx={getX(i)}
+                  cy={getYMarketCap(d.marketCapCr)}
+                  r={hoveredIdx === i ? 7 : 4.5}
+                  fill="#1d4ed8"
+                  stroke="#93c5fd"
+                  strokeWidth={hoveredIdx === i ? 3 : 1.5}
+                />
+              ))}
             </g>
           )}
 
-          {/* GREEN LINE: PROFIT AFTER TAX (PAT) */}
+          {/* GREEN LINE: PAT */}
           {showPat && (
-            <g className="pat-series">
+            <g>
               <path
                 d={patPathString}
                 fill="none"
@@ -707,35 +630,24 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeDasharray={chartMode === 'bar-line' ? '5 3' : 'none'}
-                className="filter drop-shadow-[0_2px_8px_rgba(16,185,129,0.45)]"
               />
-
-              {/* Data points for PAT */}
-              {filteredData.map((d, i) => {
-                const x = getX(i);
-                const y = getYPat(d.patCr);
-                const isHovered = hoveredIdx === i;
-
-                return (
-                  <circle
-                    key={`pat-pt-${i}`}
-                    cx={x}
-                    cy={y}
-                    r={isHovered ? 7 : 4.5}
-                    fill="#059669"
-                    stroke="#a7f3d0"
-                    strokeWidth={isHovered ? 3 : 1.5}
-                    className="transition-all duration-150"
-                  />
-                );
-              })}
+              {filteredData.map((d, i) => (
+                <circle
+                  key={`pat-pt-${i}`}
+                  cx={getX(i)}
+                  cy={getYPat(d.patCr)}
+                  r={hoveredIdx === i ? 7 : 4.5}
+                  fill="#059669"
+                  stroke="#a7f3d0"
+                  strokeWidth={hoveredIdx === i ? 3 : 1.5}
+                />
+              ))}
             </g>
           )}
 
-          {/* ================= INTERACTIVE CROSSHAIR & SCRUBBING ================= */}
+          {/* Crosshair */}
           {hoveredIdx !== null && filteredData[hoveredIdx] && (
-            <g className="interactive-crosshair pointer-events-none">
-              {/* Vertical Guide Line */}
+            <g className="pointer-events-none">
               <line
                 x1={getX(hoveredIdx)}
                 y1={margin.top}
@@ -745,8 +657,6 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                 strokeWidth="1.5"
                 strokeDasharray="4 4"
               />
-
-              {/* Active Marker on Market Cap (Blue) */}
               {showMarketCap && (
                 <circle
                   cx={getX(hoveredIdx)}
@@ -758,8 +668,6 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                   filter={`url(#${chartId}-glow)`}
                 />
               )}
-
-              {/* Active Marker on PAT (Green) */}
               {showPat && (
                 <circle
                   cx={getX(hoveredIdx)}
@@ -775,64 +683,56 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
           )}
         </svg>
 
-        {/* Floating Tooltip Pill */}
+        {/* Floating Tooltip */}
         {hoveredIdx !== null && filteredData[hoveredIdx] && (
           <div
-            className="absolute z-20 pointer-events-none bg-slate-950/95 backdrop-blur-md border border-slate-700 p-3.5 rounded-lg shadow-2xl text-xs min-w-[260px] transform -translate-x-1/2 -translate-y-full transition-all"
+            className="absolute z-20 pointer-events-none bg-slate-950/95 backdrop-blur-md border border-slate-700 p-3.5 rounded-lg shadow-2xl text-xs min-w-[250px] transform -translate-x-1/2 -translate-y-full transition-all"
             style={{
               left: `${(getX(hoveredIdx) / width) * 100}%`,
               top: `${Math.max(8, (Math.min(getYMarketCap(filteredData[hoveredIdx].marketCapCr), getYPat(filteredData[hoveredIdx].patCr)) / height) * 100 - 4)}%`,
             }}
           >
             <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
-              <span className="font-bold text-white flex items-center gap-1.5">
+              <span className="font-bold text-white flex items-center gap-1.5 font-mono">
                 <Calendar className="w-3.5 h-3.5 text-blue-400" />
-                <span>{filteredData[hoveredIdx].quarter}</span>
-                <span className="text-slate-400 font-normal">({filteredData[hoveredIdx].periodEnded})</span>
-              </span>
-              <span className="text-[10px] font-mono text-slate-300 px-1.5 py-0.5 rounded bg-slate-800">
-                {filteredData[hoveredIdx].financialYear}
+                <span>{filteredData[hoveredIdx].period}</span>
+                <span className="text-slate-400 font-normal">({filteredData[hoveredIdx].label})</span>
               </span>
             </div>
 
             <div className="mt-2 space-y-1.5 font-mono">
-              {/* Market Cap (Blue) */}
               <div className="flex items-center justify-between text-blue-300">
                 <span className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-blue-500" />
-                  <span className="font-sans font-medium text-slate-300">Market Cap:</span>
+                  <span className="font-sans text-slate-300">Market Cap:</span>
                 </span>
                 <span className="font-bold text-blue-400">
                   {formatInrCrores(filteredData[hoveredIdx].marketCapCr, true)}
                 </span>
               </div>
 
-              {/* PAT (Green) */}
               <div className="flex items-center justify-between text-emerald-300">
                 <span className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span className="font-sans font-medium text-slate-300">Quarterly PAT:</span>
+                  <span className="font-sans text-slate-300">PAT:</span>
                 </span>
                 <span className="font-bold text-emerald-400">
                   {formatInrCrores(filteredData[hoveredIdx].patCr, false)}
                 </span>
               </div>
 
-              {/* Revenue */}
               <div className="flex items-center justify-between text-slate-400 pt-1 border-t border-slate-800/80 text-[11px]">
-                <span className="font-sans">Quarterly Revenue:</span>
+                <span className="font-sans">Revenue:</span>
                 <span className="text-slate-200">₹{filteredData[hoveredIdx].revenueCr.toLocaleString('en-IN')} Cr</span>
               </div>
 
-              {/* PAT Margin */}
               <div className="flex items-center justify-between text-slate-400 text-[11px]">
                 <span className="font-sans">PAT Margin:</span>
-                <span className="text-emerald-300 font-medium">{filteredData[hoveredIdx].patMarginPct}%</span>
+                <span className="text-emerald-300 font-semibold">{filteredData[hoveredIdx].patMarginPct}%</span>
               </div>
 
-              {/* Stock Price */}
               <div className="flex items-center justify-between text-slate-400 text-[11px]">
-                <span className="font-sans">Quarter Close Price:</span>
+                <span className="font-sans">Close Price:</span>
                 <span className="text-slate-200">₹{filteredData[hoveredIdx].sharePriceInr.toLocaleString('en-IN')}</span>
               </div>
             </div>
@@ -845,32 +745,6 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
             )}
           </div>
         )}
-      </div>
-
-      {/* Chart Footer Highlights */}
-      <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center gap-1 text-slate-300">
-            <span className="w-2 h-2 rounded-full bg-blue-500" />
-            <strong className="text-blue-400">Y-Axis (Blue):</strong> Market Capitalisation in ₹ Cr / Lakh Cr
-          </span>
-          <span className="text-slate-600">·</span>
-          <span className="inline-flex items-center gap-1 text-slate-300">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            <strong className="text-emerald-400">Y-Axis (Green):</strong> Quarterly PAT in ₹ Crores
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2 text-slate-500">
-          <span>Click on chart to {isTooltipLocked ? 'unlock' : 'pin'} inspector</span>
-          <span className="text-slate-700">|</span>
-          <button
-            onClick={() => setShowGrid(!showGrid)}
-            className="hover:text-slate-300 transition-colors underline"
-          >
-            {showGrid ? 'Hide Grid' : 'Show Grid'}
-          </button>
-        </div>
       </div>
     </div>
   );
