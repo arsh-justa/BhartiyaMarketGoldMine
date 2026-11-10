@@ -124,7 +124,7 @@ export default function App() {
               Competitor Benchmark
             </a>
             <a href="#all-companies-section" className="hover:text-white transition-colors whitespace-nowrap shrink-0">
-              All Companies ({companies.length}+)
+              All Companies
             </a>
             <a href="#select-section" className="hover:text-white transition-colors whitespace-nowrap shrink-0">
               Company Switcher
@@ -137,7 +137,7 @@ export default function App() {
               className="px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-sm transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Export {companies.length} Companies ({periodType === 'yearly' ? 'Yearly' : 'Quarterly'})</span>
+              <span>Export All Companies ({periodType === 'yearly' ? 'Yearly' : 'Quarterly'})</span>
             </button>
           </div>
         </div>
@@ -151,6 +151,7 @@ export default function App() {
             company={selectedCompany} 
             currentRecord={currentRecord} 
             periodType={periodType}
+            lastSyncedDisplay={lastSyncedTime}
           />
         </section>
 
@@ -203,7 +204,7 @@ export default function App() {
       <footer className="border-t border-slate-800 bg-slate-950 mt-10 py-5 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
           <span>Bharat PAT &amp; MarketCap Analytics · Publicly Listed Indian Companies</span>
-          <span className="text-slate-400 font-mono">Market Cap &gt; ₹500 Cr Universe ({companies.length} Companies) · Synced via Yahoo Finance</span>
+          <span className="text-slate-400 font-mono">All Companies &gt; ₹500 Cr Market Cap · Synced via Yahoo Finance</span>
         </div>
       </footer>
     </div>

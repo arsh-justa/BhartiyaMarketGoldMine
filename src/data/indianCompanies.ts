@@ -34,6 +34,9 @@ export interface IndianCompany {
     dividendYieldPct: number;
     fiftyTwoWeekHigh: number;
     fiftyTwoWeekLow: number;
+    debtToEquity?: number;
+    bookValueInr?: number;
+    cashFromOperationsCr?: number;
   };
   quarterlyData: PeriodRecord[];
   yearlyData: PeriodRecord[];
@@ -138,6 +141,19 @@ export function buildCompanyRecord(
       dividendYieldPct: yieldPct,
       fiftyTwoWeekHigh: hi,
       fiftyTwoWeekLow: lo,
+      debtToEquity: Number(
+        (sector === 'Financial Services' 
+          ? 4.8 
+          : sector === 'Information Technology' 
+          ? 0.08 
+          : sector === 'Energy & Power' 
+          ? 0.44 
+          : sector === 'Metals & Mining' 
+          ? 0.62 
+          : 0.28).toFixed(2)
+      ),
+      bookValueInr: Math.round(sharePrice / (pb > 0 ? pb : 1)),
+      cashFromOperationsCr: Math.round(currentPatCr * 4 * (sector === 'Energy & Power' ? 1.45 : sector === 'Information Technology' ? 1.25 : 1.32)),
     },
     quarterlyData,
     yearlyData,

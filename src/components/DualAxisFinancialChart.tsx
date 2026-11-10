@@ -8,7 +8,6 @@ import { PeriodRecord } from '../data/indianCompanies';
 import { formatInrCrores, formatInrCompact, formatPercentage } from '../utils/formatters';
 import { 
   TrendingUp, 
-  BarChart2, 
   Maximize2, 
   Download, 
   Info,
@@ -25,7 +24,7 @@ interface DualAxisFinancialChartProps {
   yearlyData: PeriodRecord[];
 }
 
-export type ChartMode = 'dual-line' | 'bar-line' | 'normalized';
+export type ChartMode = 'dual-line' | 'normalized';
 
 export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
   companyName,
@@ -267,7 +266,7 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
             </div>
           )}
 
-          {/* Display Mode */}
+          {/* Display Mode (Dual Line or Normalized % Growth) */}
           <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
             <button
               onClick={() => setChartMode('dual-line')}
@@ -277,17 +276,7 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
               }`}
             >
               <TrendingUp className="w-3.5 h-3.5 text-blue-400" />
-              <span>Line</span>
-            </button>
-            <button
-              onClick={() => setChartMode('bar-line')}
-              title="PAT Bars + Market Cap Line"
-              className={`px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
-                chartMode === 'bar-line' ? 'bg-slate-800 text-white font-medium' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <BarChart2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Bars + Line</span>
+              <span>Dual Line</span>
             </button>
             <button
               onClick={() => setChartMode('normalized')}
@@ -558,33 +547,7 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
             })}
           </g>
 
-          {/* PAT BARS (Green) */}
-          {chartMode === 'bar-line' && showPat && (
-            <g className="pat-bars">
-              {filteredData.map((d, i) => {
-                const x = getX(i);
-                const y = getYPat(d.patCr);
-                const barWidth = Math.max(16, Math.min(45, (innerWidth / filteredData.length) * 0.48));
-                const barHeight = margin.top + innerHeight - y;
-                const isHovered = hoveredIdx === i;
 
-                return (
-                  <rect
-                    key={`pat-bar-${i}`}
-                    x={x - barWidth / 2}
-                    y={y}
-                    width={barWidth}
-                    height={barHeight}
-                    fill={`url(#${chartId}-bar-grad)`}
-                    stroke="#10b981"
-                    strokeWidth={isHovered ? 2.5 : 1}
-                    rx="3"
-                    opacity={isHovered ? 1 : 0.88}
-                  />
-                );
-              })}
-            </g>
-          )}
 
           {/* Area Fills */}
           {showMarketCap && chartMode !== 'normalized' && (
@@ -629,7 +592,6 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                 strokeWidth="3"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeDasharray={chartMode === 'bar-line' ? '5 3' : 'none'}
               />
               {filteredData.map((d, i) => (
                 <circle
