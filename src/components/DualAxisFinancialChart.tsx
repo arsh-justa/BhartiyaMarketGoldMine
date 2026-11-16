@@ -9,7 +9,6 @@ import { formatInrCrores, formatInrCompact, formatPercentage } from '../utils/fo
 import { 
   TrendingUp, 
   Maximize2, 
-  Download, 
   Info,
   Calendar
 } from 'lucide-react';
@@ -26,6 +25,16 @@ interface DualAxisFinancialChartProps {
 
 export type ChartMode = 'dual-line' | 'normalized';
 
+function formatAxisTick(record: PeriodRecord): string {
+  if (record.shortLabel) return record.shortLabel;
+  const fyMatch = record.period.match(/FY(\d{2})/i);
+  const monMatch = record.label.match(/^([A-Za-z]{3})\s+\d{4}$/);
+  if (fyMatch && monMatch) {
+    return `${fyMatch[1]} ${monMatch[1]}`;
+  }
+  return record.period;
+}
+
 export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
   companyName,
   symbol,
@@ -37,7 +46,7 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
 }) => {
   const chartId = useId();
   const [chartMode, setChartMode] = useState<ChartMode>('dual-line');
-  const [quarterRange, setQuarterRange] = useState<'4Q' | '8Q' | '12Q'>('12Q');
+  const [quarterRange, setQuarterRange] = useState<'4Q' | '8Q' | '12Q' | '10Y'>('10Y');
   const [showMarketCap, setShowMarketCap] = useState(true);
   const [showPat, setShowPat] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
@@ -45,49 +54,67 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
   const [isTooltipLocked, setIsTooltipLocked] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
-  // Active dataset based on Quarterly vs Yearly selection
+  // Active dataset based on Quarterly vs Yearly selection (10 years by default)
   const rawData = periodType === 'quarterly' ? quarterlyData : yearlyData;
 
   const filteredData = React.useMemo(() => {
-    if (periodType === 'yearly') return rawData;
-    const countMap: Record<string, number> = { '4Q': 4, '8Q': 8, '12Q': 12 };
-    const count = countMap[quarterRange] || 12;
+    if (periodType === 'yearly') return rawData.slice(-10);
+    const countMap: Record<string, number> = { '4Q': 4, '8Q': 8, '12Q': 12, '10Y': 40 };
+    const count = countMap[quarterRange] || 40;
     return rawData.slice(-count);
   }, [rawData, periodType, quarterRange]);
 
-  const activeRecord = hoveredIdx !== null && filteredData[hoveredIdx] 
-    ? filteredData[hoveredIdx] 
+  const latestValidMcapRec = [...filteredData].reverse().find(d => d.marketCapCr !== null);
+  const latestValidPatRec = [...filteredData].reverse().find(d => d.patCr !== null);
+  const activeRecord = hoveredIdx !== null && filteredData[hoveredIdx]
+    ? filteredData[hoveredIdx]
     : filteredData[filteredData.length - 1];
 
-  // Scales & Bounds
-  const marketCapValues = filteredData.map(d => d.marketCapCr);
-  const patValues = filteredData.map(d => d.patCr);
+  // Scales & Bounds (ignoring null entries so missing data leaves gaps cleanly)
+  const validMcapValues = filteredData
+    .map(d => d.marketCapCr)
+    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+  const validPatValues = filteredData
+    .map(d => d.patCr)
+    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
 
-  const rawMcapMin = Math.min(...marketCapValues);
-  const rawMcapMax = Math.max(...marketCapValues);
-  const mcapPadding = (rawMcapMax - rawMcapMin) * 0.12 || rawMcapMax * 0.1;
+  const rawMcapMin = validMcapValues.length > 0 ? Math.min(...validMcapValues) : 0;
+  const rawMcapMax = validMcapValues.length > 0 ? Math.max(...validMcapValues) : 100;
+  const mcapSpan = rawMcapMax - rawMcapMin;
+  const mcapPadding = mcapSpan * 0.12 || rawMcapMax * 0.1 || 10;
   const mcapMin = Math.max(0, rawMcapMin - mcapPadding);
   const mcapMax = rawMcapMax + mcapPadding;
 
-  const rawPatMin = Math.min(...patValues);
-  const rawPatMax = Math.max(...patValues);
-  const patPadding = (rawPatMax - rawPatMin) * 0.15 || rawPatMax * 0.1;
-  const patMin = Math.max(0, rawPatMin - patPadding);
+  const rawPatMin = validPatValues.length > 0 ? Math.min(...validPatValues) : 0;
+  const rawPatMax = validPatValues.length > 0 ? Math.max(...validPatValues) : 100;
+  const patSpan = rawPatMax - rawPatMin;
+  const patPadding = patSpan * 0.15 || Math.abs(rawPatMax) * 0.1 || 10;
+  const patMin = rawPatMin < 0 ? rawPatMin - patPadding : Math.max(0, rawPatMin - patPadding);
   const patMax = rawPatMax + patPadding;
 
-  // Normalized comparison baseline
-  const baseMcap = filteredData[0]?.marketCapCr || 1;
-  const basePat = filteredData[0]?.patCr || 1;
-  const normMcapValues = filteredData.map(d => ((d.marketCapCr - baseMcap) / baseMcap) * 100);
-  const normPatValues = filteredData.map(d => ((d.patCr - basePat) / basePat) * 100);
-  const allNormValues = [...normMcapValues, ...normPatValues];
-  const normMin = Math.min(-5, Math.floor(Math.min(...allNormValues) - 5));
-  const normMax = Math.max(10, Math.ceil(Math.max(...allNormValues) + 5));
+  // Normalized comparison baseline uses first non-null point in window
+  const firstValidMcap = validMcapValues.find(v => v !== 0) ?? validMcapValues[0] ?? 1;
+  const firstValidPat = validPatValues.find(v => v !== 0) ?? validPatValues[0] ?? 1;
+  const baseMcap = firstValidMcap || 1;
+  const basePat = Math.abs(firstValidPat) || 1;
+
+  const normMcapValues: Array<number | null> = filteredData.map(d =>
+    d.marketCapCr !== null ? ((d.marketCapCr - firstValidMcap) / baseMcap) * 100 : null
+  );
+  const normPatValues: Array<number | null> = filteredData.map(d =>
+    d.patCr !== null ? ((d.patCr - firstValidPat) / basePat) * 100 : null
+  );
+  const allNormNumbers = [...normMcapValues, ...normPatValues].filter(
+    (v): v is number => typeof v === 'number' && Number.isFinite(v)
+  );
+  const normMin = allNormNumbers.length > 0 ? Math.min(-5, Math.floor(Math.min(...allNormNumbers) - 5)) : -10;
+  const normMax = allNormNumbers.length > 0 ? Math.max(10, Math.ceil(Math.max(...allNormNumbers) + 5)) : 100;
 
   // Canvas Geometry
+  const isDenseTimeline = filteredData.length > 16;
   const width = 1000;
-  const height = 430;
-  const margin = { top: 28, right: 90, bottom: 48, left: 95 };
+  const height = isDenseTimeline ? 450 : 430;
+  const margin = { top: 28, right: 90, bottom: isDenseTimeline ? 64 : 46, left: 95 };
   const innerWidth = width - margin.left - margin.right;
   const innerHeight = height - margin.top - margin.bottom;
 
@@ -98,24 +125,46 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
 
   const getYMarketCap = (val: number) => {
     if (chartMode === 'normalized') {
-      const normVal = ((val - baseMcap) / baseMcap) * 100;
-      return margin.top + innerHeight - ((normVal - normMin) / (normMax - normMin)) * innerHeight;
+      const normVal = ((val - firstValidMcap) / baseMcap) * 100;
+      return margin.top + innerHeight - ((normVal - normMin) / (normMax - normMin || 1)) * innerHeight;
     }
-    return margin.top + innerHeight - ((val - mcapMin) / (mcapMax - mcapMin)) * innerHeight;
+    return margin.top + innerHeight - ((val - mcapMin) / (mcapMax - mcapMin || 1)) * innerHeight;
   };
 
   const getYPat = (val: number) => {
     if (chartMode === 'normalized') {
-      const normVal = ((val - basePat) / basePat) * 100;
-      return margin.top + innerHeight - ((normVal - normMin) / (normMax - normMin)) * innerHeight;
+      const normVal = ((val - firstValidPat) / basePat) * 100;
+      return margin.top + innerHeight - ((normVal - normMin) / (normMax - normMin || 1)) * innerHeight;
     }
-    return margin.top + innerHeight - ((val - patMin) / (patMax - patMin)) * innerHeight;
+    return margin.top + innerHeight - ((val - patMin) / (patMax - patMin || 1)) * innerHeight;
   };
 
-  const mcapPoints = filteredData.map((d, i) => ({ x: getX(i), y: getYMarketCap(d.marketCapCr) }));
-  const patPoints = filteredData.map((d, i) => ({ x: getX(i), y: getYPat(d.patCr) }));
+  interface ChartPoint {
+    x: number;
+    y: number;
+    idx: number;
+  }
 
-  const createSmoothPath = (points: { x: number; y: number }[]) => {
+  const buildSegments = (getVal: (d: PeriodRecord) => number | null, getY: (v: number) => number): ChartPoint[][] => {
+    const segments: ChartPoint[][] = [];
+    let current: ChartPoint[] = [];
+    filteredData.forEach((d, idx) => {
+      const v = getVal(d);
+      if (typeof v === 'number' && Number.isFinite(v)) {
+        current.push({ x: getX(idx), y: getY(v), idx });
+      } else if (current.length > 0) {
+        segments.push(current);
+        current = [];
+      }
+    });
+    if (current.length > 0) segments.push(current);
+    return segments;
+  };
+
+  const mcapSegments = buildSegments(d => d.marketCapCr, getYMarketCap);
+  const patSegments = buildSegments(d => d.patCr, getYPat);
+
+  const createSmoothPath = (points: ChartPoint[]) => {
     if (points.length === 0) return '';
     if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
     let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
@@ -135,17 +184,6 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
     return d;
   };
 
-  const mcapPathString = createSmoothPath(mcapPoints);
-  const patPathString = createSmoothPath(patPoints);
-
-  const mcapAreaString = mcapPoints.length > 0
-    ? `${mcapPathString} L ${mcapPoints[mcapPoints.length - 1].x.toFixed(1)} ${(margin.top + innerHeight).toFixed(1)} L ${mcapPoints[0].x.toFixed(1)} ${(margin.top + innerHeight).toFixed(1)} Z`
-    : '';
-
-  const patAreaString = patPoints.length > 0
-    ? `${patPathString} L ${patPoints[patPoints.length - 1].x.toFixed(1)} ${(margin.top + innerHeight).toFixed(1)} L ${patPoints[0].x.toFixed(1)} ${(margin.top + innerHeight).toFixed(1)} Z`
-    : '';
-
   const numTicks = 5;
   const mcapTicks = Array.from({ length: numTicks }, (_, i) => {
     const val = mcapMin + (i / (numTicks - 1)) * (mcapMax - mcapMin);
@@ -159,7 +197,7 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
 
   const normTicks = Array.from({ length: numTicks }, (_, i) => {
     const val = normMin + (i / (numTicks - 1)) * (normMax - normMin);
-    const y = margin.top + innerHeight - ((val - normMin) / (normMax - normMin)) * innerHeight;
+    const y = margin.top + innerHeight - ((val - normMin) / (normMax - normMin || 1)) * innerHeight;
     return { val, y };
   });
 
@@ -183,23 +221,19 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
     setHoveredIdx(nearestIdx);
   };
 
-  const handleExportSvg = () => {
-    if (!svgRef.current) return;
-    const svgData = new XMLSerializer().serializeToString(svgRef.current);
-    const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${symbol}_${periodType}_Graph.svg`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  const firstMcapItem = filteredData.find(d => d.marketCapCr !== null);
+  const lastMcapItem = [...filteredData].reverse().find(d => d.marketCapCr !== null);
+  const mcapDeltaPct =
+    firstMcapItem?.marketCapCr && lastMcapItem?.marketCapCr
+      ? ((lastMcapItem.marketCapCr - firstMcapItem.marketCapCr) / firstMcapItem.marketCapCr) * 100
+      : 0;
 
-  const firstItem = filteredData[0];
-  const lastItem = filteredData[filteredData.length - 1];
-  const mcapDeltaPct = firstItem && lastItem ? ((lastItem.marketCapCr - firstItem.marketCapCr) / firstItem.marketCapCr) * 100 : 0;
-  const patDeltaPct = firstItem && lastItem ? ((lastItem.patCr - firstItem.patCr) / firstItem.patCr) * 100 : 0;
+  const firstPatItem = filteredData.find(d => d.patCr !== null);
+  const lastPatItem = [...filteredData].reverse().find(d => d.patCr !== null);
+  const patDeltaPct =
+    firstPatItem?.patCr && lastPatItem?.patCr
+      ? ((lastPatItem.patCr - firstPatItem.patCr) / Math.abs(firstPatItem.patCr)) * 100
+      : 0;
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-2xl relative">
@@ -247,12 +281,13 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
             </button>
           </div>
 
-          {/* Sub-Range for Quarterly */}
+          {/* Sub-Range for Quarterly (10Y default) */}
           {periodType === 'quarterly' && (
             <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
-              {(['4Q', '8Q', '12Q'] as const).map(q => (
+              {(['4Q', '8Q', '12Q', '10Y'] as const).map(q => (
                 <button
                   key={q}
+                  type="button"
                   onClick={() => setQuarterRange(q)}
                   className={`px-2.5 py-1.5 rounded-md transition-all ${
                     quarterRange === q
@@ -266,19 +301,21 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
             </div>
           )}
 
-          {/* Display Mode (Dual Line or Normalized % Growth) */}
+          {/* Display Mode (Market Price or Normalized % Growth) */}
           <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
             <button
+              type="button"
               onClick={() => setChartMode('dual-line')}
-              title="Dual Line"
+              title="Market Price"
               className={`px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
                 chartMode === 'dual-line' ? 'bg-slate-800 text-white font-medium' : 'text-slate-400 hover:text-white'
               }`}
             >
               <TrendingUp className="w-3.5 h-3.5 text-blue-400" />
-              <span>Dual Line</span>
+              <span>Market Price</span>
             </button>
             <button
+              type="button"
               onClick={() => setChartMode('normalized')}
               title="Normalized Growth"
               className={`px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
@@ -289,21 +326,14 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
               <span>% Growth</span>
             </button>
           </div>
-
-          <button
-            onClick={handleExportSvg}
-            className="p-2 text-slate-400 hover:text-white bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-lg transition-colors"
-            title="Export SVG"
-          >
-            <Download className="w-4 h-4" />
-          </button>
         </div>
       </div>
 
       {/* Clean Interactive Legend Buttons */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 pb-1 text-xs">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 pt-3 pb-1 text-xs">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <button
+            type="button"
             onClick={() => setShowMarketCap(!showMarketCap)}
             className={`flex items-center gap-2 px-2.5 py-1 rounded transition-colors border ${
               showMarketCap
@@ -314,11 +344,15 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
             <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm" />
             <span className="font-semibold">Market Cap</span>
             <span className="font-mono text-blue-400 font-bold">
-              {formatInrCrores(activeRecord?.marketCapCr || 0, true)}
+              {(hoveredIdx !== null ? activeRecord?.marketCapCr : latestValidMcapRec?.marketCapCr) !== null &&
+              (hoveredIdx !== null ? activeRecord?.marketCapCr : latestValidMcapRec?.marketCapCr) !== undefined
+                ? formatInrCrores((hoveredIdx !== null ? activeRecord?.marketCapCr : latestValidMcapRec?.marketCapCr) as number, true)
+                : 'N/A'}
             </span>
           </button>
 
           <button
+            type="button"
             onClick={() => setShowPat(!showPat)}
             className={`flex items-center gap-2 px-2.5 py-1 rounded transition-colors border ${
               showPat
@@ -329,9 +363,19 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm" />
             <span className="font-semibold">PAT (Net Profit)</span>
             <span className="font-mono text-emerald-400 font-bold">
-              {formatInrCrores(activeRecord?.patCr || 0, false)}
+              {(hoveredIdx !== null ? activeRecord?.patCr : latestValidPatRec?.patCr) !== null &&
+              (hoveredIdx !== null ? activeRecord?.patCr : latestValidPatRec?.patCr) !== undefined
+                ? formatInrCrores((hoveredIdx !== null ? activeRecord?.patCr : latestValidPatRec?.patCr) as number, false)
+                : 'no information'}
             </span>
           </button>
+
+          {showPat && filteredData.some(d => d.patCr === null) && (
+            <span className="flex items-center gap-1.5 px-2 py-1 text-[11px] text-slate-400">
+              <span className="w-2 h-2 rounded-full bg-slate-500 inline-block" />
+              <span>No PAT information</span>
+            </span>
+          )}
         </div>
 
         <div className="hidden sm:flex items-center gap-3 text-slate-400 font-mono text-xs">
@@ -506,7 +550,7 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
             </g>
           )}
 
-          {/* X-AXIS (QUARTERS OR YEARS) */}
+          {/* X-AXIS (COMPACT SHORT LABELS LIKE "24 Jun" OR "FY24"; FULL DETAILS ON HOVER) */}
           <g className="x-axis" transform={`translate(0, ${margin.top + innerHeight})`}>
             <line
               x1={margin.left}
@@ -518,92 +562,151 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
             />
             {filteredData.map((d, i) => {
               const x = getX(i);
+              const shortTick = formatAxisTick(d);
+              const showLabel =
+                !isDenseTimeline || i % 2 === 0 || i === filteredData.length - 1;
               return (
                 <g key={`period-tick-${i}`} transform={`translate(${x}, 0)`}>
-                  <line x1="0" y1="0" x2="0" y2="5" stroke="#475569" strokeWidth="1" />
-                  <text
-                    x="0"
-                    y="18"
-                    textAnchor="middle"
-                    fill={hoveredIdx === i ? '#ffffff' : '#cbd5e1'}
-                    fontSize="11"
-                    fontWeight={hoveredIdx === i ? '700' : '600'}
-                    className="font-mono"
-                  >
-                    {d.period}
-                  </text>
-                  <text
-                    x="0"
-                    y="30"
-                    textAnchor="middle"
-                    fill="#64748b"
-                    fontSize="9"
-                    className="font-mono"
-                  >
-                    {d.label}
-                  </text>
+                  <line
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2={showLabel ? '5' : '3'}
+                    stroke="#475569"
+                    strokeWidth="1"
+                  />
+                  {showLabel && (
+                    isDenseTimeline ? (
+                      <text
+                        x="0"
+                        y="12"
+                        transform="rotate(-45 0 12)"
+                        textAnchor="end"
+                        fill={hoveredIdx === i ? '#ffffff' : '#cbd5e1'}
+                        fontSize="10"
+                        fontWeight={hoveredIdx === i ? '700' : '600'}
+                        className="font-mono"
+                      >
+                        {shortTick}
+                      </text>
+                    ) : (
+                      <text
+                        x="0"
+                        y="20"
+                        textAnchor="middle"
+                        fill={hoveredIdx === i ? '#ffffff' : '#cbd5e1'}
+                        fontSize="11"
+                        fontWeight={hoveredIdx === i ? '700' : '600'}
+                        className="font-mono"
+                      >
+                        {shortTick}
+                      </text>
+                    )
+                  )}
                 </g>
               );
             })}
           </g>
 
-
-
-          {/* Area Fills */}
-          {showMarketCap && chartMode !== 'normalized' && (
-            <path d={mcapAreaString} fill={`url(#${chartId}-blue-grad)`} className="pointer-events-none" />
-          )}
-          {showPat && chartMode === 'dual-line' && (
-            <path d={patAreaString} fill={`url(#${chartId}-green-grad)`} className="pointer-events-none" />
-          )}
+          {/* Area Fills (per contiguous segment so missing data stays blank) */}
+          {showMarketCap && chartMode !== 'normalized' && mcapSegments.map((seg, segIdx) => {
+            if (seg.length < 2) return null;
+            const segPath = createSmoothPath(seg);
+            const segArea = `${segPath} L ${seg[seg.length - 1].x.toFixed(1)} ${(margin.top + innerHeight).toFixed(1)} L ${seg[0].x.toFixed(1)} ${(margin.top + innerHeight).toFixed(1)} Z`;
+            return (
+              <path
+                key={`mcap-area-${segIdx}`}
+                d={segArea}
+                fill={`url(#${chartId}-blue-grad)`}
+                className="pointer-events-none"
+              />
+            );
+          })}
+          {showPat && chartMode === 'dual-line' && patSegments.map((seg, segIdx) => {
+            if (seg.length < 2) return null;
+            const segPath = createSmoothPath(seg);
+            const segArea = `${segPath} L ${seg[seg.length - 1].x.toFixed(1)} ${(margin.top + innerHeight).toFixed(1)} L ${seg[0].x.toFixed(1)} ${(margin.top + innerHeight).toFixed(1)} Z`;
+            return (
+              <path
+                key={`pat-area-${segIdx}`}
+                d={segArea}
+                fill={`url(#${chartId}-green-grad)`}
+                className="pointer-events-none"
+              />
+            );
+          })}
 
           {/* BLUE LINE: MARKET CAPITALISATION */}
           {showMarketCap && (
             <g>
-              <path
-                d={mcapPathString}
-                fill="none"
-                stroke="#2563eb"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {filteredData.map((d, i) => (
+              {mcapSegments.map((seg, segIdx) =>
+                seg.length >= 2 ? (
+                  <path
+                    key={`mcap-seg-${segIdx}`}
+                    d={createSmoothPath(seg)}
+                    fill="none"
+                    stroke="#2563eb"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                ) : null
+              )}
+              {mcapSegments.flat().map(pt => (
                 <circle
-                  key={`mcap-pt-${i}`}
-                  cx={getX(i)}
-                  cy={getYMarketCap(d.marketCapCr)}
-                  r={hoveredIdx === i ? 7 : 4.5}
+                  key={`mcap-pt-${pt.idx}`}
+                  cx={pt.x}
+                  cy={pt.y}
+                  r={hoveredIdx === pt.idx ? 6.5 : isDenseTimeline ? 3.2 : 4.5}
                   fill="#1d4ed8"
                   stroke="#93c5fd"
-                  strokeWidth={hoveredIdx === i ? 3 : 1.5}
+                  strokeWidth={hoveredIdx === pt.idx ? 3 : 1.5}
                 />
               ))}
             </g>
           )}
 
-          {/* GREEN LINE: PAT */}
+          {/* GREEN LINE: PAT (grey dot where data is absent) */}
           {showPat && (
             <g>
-              <path
-                d={patPathString}
-                fill="none"
-                stroke="#10b981"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {filteredData.map((d, i) => (
+              {patSegments.map((seg, segIdx) =>
+                seg.length >= 2 ? (
+                  <path
+                    key={`pat-seg-${segIdx}`}
+                    d={createSmoothPath(seg)}
+                    fill="none"
+                    stroke="#10b981"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                ) : null
+              )}
+              {patSegments.flat().map(pt => (
                 <circle
-                  key={`pat-pt-${i}`}
-                  cx={getX(i)}
-                  cy={getYPat(d.patCr)}
-                  r={hoveredIdx === i ? 7 : 4.5}
+                  key={`pat-pt-${pt.idx}`}
+                  cx={pt.x}
+                  cy={pt.y}
+                  r={hoveredIdx === pt.idx ? 6.5 : isDenseTimeline ? 3.5 : 4.5}
                   fill="#059669"
                   stroke="#a7f3d0"
-                  strokeWidth={hoveredIdx === i ? 3 : 1.5}
+                  strokeWidth={hoveredIdx === pt.idx ? 3 : 1.5}
                 />
               ))}
+              {filteredData.map((d, i) =>
+                d.patCr === null ? (
+                  <circle
+                    key={`pat-missing-${i}`}
+                    cx={getX(i)}
+                    cy={margin.top + innerHeight - 8}
+                    r={hoveredIdx === i ? 6 : isDenseTimeline ? 3.2 : 4.2}
+                    fill="#64748b"
+                    stroke={hoveredIdx === i ? '#e2e8f0' : '#94a3b8'}
+                    strokeWidth={hoveredIdx === i ? 2.5 : 1}
+                    opacity={hoveredIdx === i ? 1 : 0.85}
+                  />
+                ) : null
+              )}
             </g>
           )}
 
@@ -619,10 +722,10 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                 strokeWidth="1.5"
                 strokeDasharray="4 4"
               />
-              {showMarketCap && (
+              {showMarketCap && filteredData[hoveredIdx].marketCapCr !== null && (
                 <circle
                   cx={getX(hoveredIdx)}
-                  cy={getYMarketCap(filteredData[hoveredIdx].marketCapCr)}
+                  cy={getYMarketCap(filteredData[hoveredIdx].marketCapCr as number)}
                   r="7.5"
                   fill="#3b82f6"
                   stroke="#ffffff"
@@ -630,10 +733,10 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                   filter={`url(#${chartId}-glow)`}
                 />
               )}
-              {showPat && (
+              {showPat && filteredData[hoveredIdx].patCr !== null && (
                 <circle
                   cx={getX(hoveredIdx)}
-                  cy={getYPat(filteredData[hoveredIdx].patCr)}
+                  cy={getYPat(filteredData[hoveredIdx].patCr as number)}
                   r="7.5"
                   fill="#10b981"
                   stroke="#ffffff"
@@ -641,72 +744,114 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                   filter={`url(#${chartId}-glow)`}
                 />
               )}
+              {showPat && filteredData[hoveredIdx].patCr === null && (
+                <circle
+                  cx={getX(hoveredIdx)}
+                  cy={margin.top + innerHeight - 8}
+                  r="7"
+                  fill="#64748b"
+                  stroke="#ffffff"
+                  strokeWidth="2"
+                />
+              )}
             </g>
           )}
         </svg>
 
         {/* Floating Tooltip */}
-        {hoveredIdx !== null && filteredData[hoveredIdx] && (
-          <div
-            className="absolute z-20 pointer-events-none bg-slate-950/95 backdrop-blur-md border border-slate-700 p-3.5 rounded-lg shadow-2xl text-xs min-w-[250px] transform -translate-x-1/2 -translate-y-full transition-all"
-            style={{
-              left: `${(getX(hoveredIdx) / width) * 100}%`,
-              top: `${Math.max(8, (Math.min(getYMarketCap(filteredData[hoveredIdx].marketCapCr), getYPat(filteredData[hoveredIdx].patCr)) / height) * 100 - 4)}%`,
-            }}
-          >
-            <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
-              <span className="font-bold text-white flex items-center gap-1.5 font-mono">
-                <Calendar className="w-3.5 h-3.5 text-blue-400" />
-                <span>{filteredData[hoveredIdx].period}</span>
-                <span className="text-slate-400 font-normal">({filteredData[hoveredIdx].label})</span>
-              </span>
+        {hoveredIdx !== null && filteredData[hoveredIdx] && (() => {
+          const rec = filteredData[hoveredIdx];
+          const yCandidates: number[] = [];
+          if (showMarketCap && rec.marketCapCr !== null) {
+            yCandidates.push(getYMarketCap(rec.marketCapCr));
+          }
+          if (showPat && rec.patCr !== null) {
+            yCandidates.push(getYPat(rec.patCr));
+          } else if (showPat && rec.patCr === null) {
+            yCandidates.push(margin.top + innerHeight - 8);
+          }
+          const minY = yCandidates.length > 0 ? Math.min(...yCandidates) : margin.top + innerHeight * 0.45;
+          const mcapGrowth = normMcapValues[hoveredIdx];
+          const patGrowth = normPatValues[hoveredIdx];
+
+          return (
+            <div
+              className="absolute z-20 pointer-events-none bg-slate-950/95 backdrop-blur-md border border-slate-700 p-3 sm:p-3.5 rounded-lg shadow-2xl text-xs min-w-[210px] sm:min-w-[250px] max-w-[calc(100%-0.5rem)] transform -translate-x-1/2 -translate-y-full transition-all"
+              style={{
+                left: `${Math.min(72, Math.max(28, (getX(hoveredIdx) / width) * 100))}%`,
+                top: `${Math.max(16, (minY / height) * 100 - 4)}%`,
+              }}
+            >
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
+                <span className="font-bold text-white flex items-center gap-1.5 font-mono">
+                  <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                  <span>{rec.period}</span>
+                  <span className="text-slate-400 font-normal">({rec.label})</span>
+                </span>
+              </div>
+
+              <div className="mt-2 space-y-1.5 font-mono">
+                <div className="flex items-center justify-between text-blue-300">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    <span className="font-sans text-slate-300">Market Cap:</span>
+                  </span>
+                  <span className={rec.marketCapCr !== null ? 'font-bold text-blue-400' : 'font-sans text-slate-400'}>
+                    {rec.marketCapCr !== null ? formatInrCrores(rec.marketCapCr, true) : 'no information'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-emerald-300">
+                  <span className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${rec.patCr !== null ? 'bg-emerald-500' : 'bg-slate-500'}`} />
+                    <span className="font-sans text-slate-300">PAT:</span>
+                  </span>
+                  <span className={rec.patCr !== null ? 'font-bold text-emerald-400' : 'font-sans text-slate-400'}>
+                    {rec.patCr !== null ? formatInrCrores(rec.patCr, false) : 'no information'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-slate-400 pt-1 border-t border-slate-800/80 text-[11px]">
+                  <span className="font-sans">Revenue:</span>
+                  <span className={rec.revenueCr !== null ? 'text-slate-200' : 'font-sans text-slate-400'}>
+                    {rec.revenueCr !== null ? `₹${rec.revenueCr.toLocaleString('en-IN')} Cr` : 'no information'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                  <span className="font-sans">PAT Margin:</span>
+                  <span className={rec.patMarginPct !== null ? 'text-emerald-300 font-semibold' : 'font-sans text-slate-400'}>
+                    {rec.patMarginPct !== null ? `${rec.patMarginPct}%` : 'no information'}
+                  </span>
+                </div>
+
+                {chartMode === 'normalized' ? (
+                  <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                    <span className="font-sans">Growth %:</span>
+                    <span className="text-purple-300 font-semibold">
+                      M-Cap {mcapGrowth !== null ? formatPercentage(mcapGrowth) : 'no information'} · PAT{' '}
+                      {patGrowth !== null ? formatPercentage(patGrowth) : 'no information'}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                    <span className="font-sans">Close Price:</span>
+                    <span className="text-slate-200">
+                      {rec.sharePriceInr !== null ? `₹${rec.sharePriceInr.toLocaleString('en-IN')}` : '—'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {rec.eventNote && (
+                <div className="mt-2 pt-1.5 border-t border-slate-800 text-[10.5px] text-amber-300/90 leading-tight flex items-start gap-1">
+                  <Info className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+                  <span>{rec.eventNote}</span>
+                </div>
+              )}
             </div>
-
-            <div className="mt-2 space-y-1.5 font-mono">
-              <div className="flex items-center justify-between text-blue-300">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-blue-500" />
-                  <span className="font-sans text-slate-300">Market Cap:</span>
-                </span>
-                <span className="font-bold text-blue-400">
-                  {formatInrCrores(filteredData[hoveredIdx].marketCapCr, true)}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between text-emerald-300">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span className="font-sans text-slate-300">PAT:</span>
-                </span>
-                <span className="font-bold text-emerald-400">
-                  {formatInrCrores(filteredData[hoveredIdx].patCr, false)}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between text-slate-400 pt-1 border-t border-slate-800/80 text-[11px]">
-                <span className="font-sans">Revenue:</span>
-                <span className="text-slate-200">₹{filteredData[hoveredIdx].revenueCr.toLocaleString('en-IN')} Cr</span>
-              </div>
-
-              <div className="flex items-center justify-between text-slate-400 text-[11px]">
-                <span className="font-sans">PAT Margin:</span>
-                <span className="text-emerald-300 font-semibold">{filteredData[hoveredIdx].patMarginPct}%</span>
-              </div>
-
-              <div className="flex items-center justify-between text-slate-400 text-[11px]">
-                <span className="font-sans">Close Price:</span>
-                <span className="text-slate-200">₹{filteredData[hoveredIdx].sharePriceInr.toLocaleString('en-IN')}</span>
-              </div>
-            </div>
-
-            {filteredData[hoveredIdx].eventNote && (
-              <div className="mt-2 pt-1.5 border-t border-slate-800 text-[10.5px] text-amber-300/90 leading-tight flex items-start gap-1">
-                <Info className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
-                <span>{filteredData[hoveredIdx].eventNote}</span>
-              </div>
-            )}
-          </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );

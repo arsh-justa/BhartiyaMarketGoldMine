@@ -19,19 +19,26 @@ export const FinancialMetricsCards: React.FC<FinancialMetricsCardsProps> = ({
   company,
   lastSyncedDisplay = 'Today',
 }) => {
-  // Use latest full-year records for annual metrics
+  // Use latest full-year records with non-null fallback for annual metrics
   const latestYearly = company.yearlyData[company.yearlyData.length - 1];
   const prevYearly = company.yearlyData[company.yearlyData.length - 2] || company.yearlyData[0];
 
+  const latestMcap = latestYearly?.marketCapCr ?? 0;
+  const prevMcap = prevYearly?.marketCapCr ?? latestMcap;
+  const latestPat = latestYearly?.patCr ?? 0;
+  const prevPat = prevYearly?.patCr ?? latestPat;
+  const latestRev = latestYearly?.revenueCr ?? 0;
+  const prevRev = prevYearly?.revenueCr ?? latestRev;
+
   // 1. Yearly Market Cap growth %
-  const yearlyMcapGrowth = ((latestYearly.marketCapCr - prevYearly.marketCapCr) / prevYearly.marketCapCr) * 100;
+  const yearlyMcapGrowth = prevMcap ? ((latestMcap - prevMcap) / Math.abs(prevMcap)) * 100 : 0;
 
   // 2. Yearly PAT growth % and Yearly Sales growth %
-  const yearlyPatGrowth = ((latestYearly.patCr - prevYearly.patCr) / prevYearly.patCr) * 100;
-  const yearlySalesGrowth = ((latestYearly.revenueCr - prevYearly.revenueCr) / prevYearly.revenueCr) * 100;
+  const yearlyPatGrowth = prevPat ? ((latestPat - prevPat) / Math.abs(prevPat)) * 100 : 0;
+  const yearlySalesGrowth = prevRev ? ((latestRev - prevRev) / Math.abs(prevRev)) * 100 : 0;
 
   // 3. Share Price, Book Value, Debt to Equity
-  const sharePrice = latestYearly.sharePriceInr;
+  const sharePrice = latestYearly?.sharePriceInr ?? 0;
   const debtToEquity = company.benchmarks.debtToEquity ?? 0.38;
   const bookValue = company.benchmarks.bookValueInr ?? Math.round(sharePrice / (company.benchmarks.pbRatio || 1));
 
@@ -56,10 +63,10 @@ export const FinancialMetricsCards: React.FC<FinancialMetricsCardsProps> = ({
           </div>
           <div className="mt-2.5">
             <div className="text-2xl font-bold font-mono text-white tracking-tight tabular-nums">
-              {formatInrCrores(latestYearly.marketCapCr, true)}
+              {formatInrCrores(latestMcap, true)}
             </div>
             <div className="text-xs font-mono text-slate-400 mt-0.5">
-              ({formatInrCrores(latestYearly.marketCapCr, false)})
+              ({formatInrCrores(latestMcap, false)})
             </div>
           </div>
         </div>
@@ -86,11 +93,11 @@ export const FinancialMetricsCards: React.FC<FinancialMetricsCardsProps> = ({
           </div>
           <div className="mt-2.5">
             <div className="text-2xl font-bold font-mono text-emerald-400 tracking-tight tabular-nums">
-              {formatInrCrores(latestYearly.patCr, false)}
+              {formatInrCrores(latestPat, false)}
             </div>
             <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
               <span>Net Margin:</span>
-              <span className="font-mono text-emerald-300 font-semibold">{latestYearly.patMarginPct}%</span>
+              <span className="font-mono text-emerald-300 font-semibold">{latestYearly.patMarginPct ?? 0}%</span>
             </div>
           </div>
         </div>

@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { IndianCompany } from '../data/indianCompanies';
 import { formatInrCrores } from '../utils/formatters';
-import { Users2, ArrowRight } from 'lucide-react';
+import { Users2, ArrowRight, ChevronDown, ChevronRight } from 'lucide-react';
 
 interface CompetitorComparisonProps {
   currentCompany: IndianCompany;
@@ -116,6 +116,7 @@ export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
   onSelectCompany,
 }) => {
   const [filterMode, setFilterMode] = useState<'direct-industry' | 'same-sector'>('direct-industry');
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
   // Identify at least 10 competitor companies strictly within the same industry/domain
   const competitors = React.useMemo(() => {
@@ -189,31 +190,49 @@ export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 md:p-6 shadow-xl">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
-        <div>
-          <h3 className="text-base font-bold text-white flex items-center gap-2">
-            <Users2 className="w-5 h-5 text-blue-400" />
-            <span>Competitors &amp; Peer Comparison: {currentCompany.industry}</span>
-          </h3>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Benchmarking {currentCompany.name} against {competitors.length - 1} peers in {currentCompany.sector} (Annual PAT, Market Cap &amp; Cash from Operating Profit)
-          </p>
-        </div>
+      {/* Collapsible Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setIsExpanded(prev => !prev)}
+          aria-expanded={isExpanded}
+          className="flex items-start gap-2.5 text-left group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
+        >
+          <span className="mt-0.5 p-1 rounded-md bg-slate-950 border border-slate-800 text-slate-400 group-hover:text-white group-hover:border-slate-700 transition-colors shrink-0">
+            {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </span>
+          <div>
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Users2 className="w-5 h-5 text-blue-400 shrink-0" />
+              <span>Competitors &amp; Peer Comparison: {currentCompany.industry}</span>
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Benchmarking {currentCompany.name} against {competitors.length - 1} peers in {currentCompany.sector} (Annual PAT, Market Cap &amp; Cash from Operating Profit)
+            </p>
+          </div>
+        </button>
 
         {/* Filter scope toggle */}
-        <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs font-medium">
+        <div className="flex flex-wrap sm:flex-nowrap items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs font-medium max-w-full">
           <button
-            onClick={() => setFilterMode('direct-industry')}
-            className={`px-3 py-1 rounded-md transition-colors ${
+            type="button"
+            onClick={() => {
+              setFilterMode('direct-industry');
+              setIsExpanded(true);
+            }}
+            className={`px-3 py-1.5 rounded-md transition-colors whitespace-nowrap ${
               filterMode === 'direct-industry' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
             Direct &amp; Industry ({competitors.length})
           </button>
           <button
-            onClick={() => setFilterMode('same-sector')}
-            className={`px-3 py-1 rounded-md transition-colors ${
+            type="button"
+            onClick={() => {
+              setFilterMode('same-sector');
+              setIsExpanded(true);
+            }}
+            className={`px-3 py-1.5 rounded-md transition-colors truncate max-w-full ${
               filterMode === 'same-sector' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -223,12 +242,13 @@ export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
       </div>
 
       {/* Benchmark Rows */}
-      <div className="mt-4 space-y-4">
+      {isExpanded && (
+      <div className="mt-4 pt-4 border-t border-slate-800 space-y-4">
         {competitors.map((peer, idx) => {
           const isSelected = peer.id === currentCompany.id;
           const latestYearly = peer.yearlyData[peer.yearlyData.length - 1];
-          const annualPatCr = latestYearly.patCr;
-          const mcapCr = latestYearly.marketCapCr;
+          const annualPatCr = latestYearly?.patCr ?? 0;
+          const mcapCr = latestYearly?.marketCapCr ?? 0;
           const cashFromOpsCr = peer.benchmarks.cashFromOperationsCr || Math.round(annualPatCr * 1.32);
 
           const mcapWidthPct = Math.max(3, (mcapCr / maxMcap) * 100);
@@ -261,7 +281,7 @@ export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
 
                 <div className="flex items-center gap-3.5 text-xs font-mono">
                   <span className="text-slate-400">
-                    Net Margin: <strong className="text-emerald-400">{latestYearly.patMarginPct}%</strong>
+                    Net Margin: <strong className="text-emerald-400">{latestYearly?.patMarginPct ?? 0}%</strong>
                   </span>
                   <span className="text-slate-400">
                     P/E: <strong className="text-slate-200">{peer.benchmarks.peRatio}x</strong>
@@ -341,6 +361,7 @@ export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
           );
         })}
       </div>
+      )}
     </div>
   );
 };

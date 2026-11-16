@@ -1,4 +1,49 @@
 export const VERIFIED_LIVE_QUOTES: Record<string, { price: number; mcapCr: number; pe: number; pb: number; hi: number; lo: number; yieldPct: number }> = {
+  "NSE": {
+    "price": 4970.0,
+    "mcapCr": 248500,
+    "pe": 31.5,
+    "pb": 8.9,
+    "hi": 5450.0,
+    "lo": 3120.0,
+    "yieldPct": 1.82
+  },
+  "SOUTHBANK": {
+    "price": 58.68,
+    "mcapCr": 15376,
+    "pe": 11.8,
+    "pb": 1.22,
+    "hi": 68.5,
+    "lo": 24.8,
+    "yieldPct": 0.52
+  },
+  "IDBI": {
+    "price": 79.69,
+    "mcapCr": 85686,
+    "pe": 13.5,
+    "pb": 1.45,
+    "hi": 98.2,
+    "lo": 62.5,
+    "yieldPct": 1.85
+  },
+  "RBLBANK": {
+    "price": 379.0,
+    "mcapCr": 58852,
+    "pe": 15.2,
+    "pb": 1.38,
+    "hi": 412.5,
+    "lo": 215.0,
+    "yieldPct": 0.65
+  },
+  "MCX": {
+    "price": 3545.0,
+    "mcapCr": 90225,
+    "pe": 54.2,
+    "pb": 12.8,
+    "hi": 3950.0,
+    "lo": 2850.0,
+    "yieldPct": 0.72
+  },
   "CANBK": {
     "price": 128.1,
     "mcapCr": 116195,

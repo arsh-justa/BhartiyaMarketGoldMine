@@ -229,7 +229,7 @@ export async function executeMarketSync(
       const updatedQuarterly = [...comp.quarterlyData];
       const lastQIndex = updatedQuarterly.length - 1;
       if (lastQIndex >= 0) {
-        const currentMcap = updatedQuarterly[lastQIndex].marketCapCr;
+        const currentMcap = updatedQuarterly[lastQIndex].marketCapCr ?? 0;
         const newMcap = Math.round(currentMcap * drift);
         updatedQuarterly[lastQIndex] = {
           ...updatedQuarterly[lastQIndex],
@@ -255,4 +255,156 @@ export async function executeMarketSync(
       },
     };
   }
+}
+
+interface HistoryApiPayload {
+  symbol: string;
+  isIndex: boolean;
+  livePrice: number | null;
+  liveMarketCapCr: number | null;
+  monthlyCloses: Record<string, number>;
+  monthlyMarketCapCr: Record<string, number>;
+  annualFinancials: Record<string, { patCr: number | null; revenueCr: number | null }>;
+  quarterlyFinancials: Record<string, { patCr: number | null; revenueCr: number | null }>;
+}
+
+/**
+ * Fetches 10 years of historical prices/market cap and available audited financials
+ * from /api/stock/history/:symbol, preserving null where historical data does not exist.
+ */
+export async function fetchCompany10YHistory(company: IndianCompany): Promise<IndianCompany> {
+  const res = await fetch(`/api/stock/history/${encodeURIComponent(company.symbol)}`);
+  if (!res.ok) {
+    throw new Error(`History API responded with status ${res.status}`);
+  }
+  const json = await res.json();
+  const data: HistoryApiPayload | undefined = json?.data;
+  if (!data) return company;
+
+  const monthlyCloses = data.monthlyCloses || {};
+  const monthlyMcapCr = data.monthlyMarketCapCr || {};
+  const annualFin = data.annualFinancials || {};
+  const quarterlyFin = data.quarterlyFinancials || {};
+
+  const hasMonthlyCloses = Object.keys(monthlyCloses).length > 0;
+  const hasAnnualFin = Object.keys(annualFin).length > 0;
+  const hasQuarterlyFin = Object.keys(quarterlyFin).length > 0;
+
+  const lastExistingYearly = company.yearlyData[company.yearlyData.length - 1];
+  const refPrice = data.livePrice ?? lastExistingYearly?.sharePriceInr ?? null;
+  const refMcap = data.liveMarketCapCr ?? lastExistingYearly?.marketCapCr ?? null;
+
+  const computeMcapFromClose = (monthKey: string | undefined, closePrice: number | null): number | null => {
+    if (monthKey && typeof monthlyMcapCr[monthKey] === 'number') {
+      return monthlyMcapCr[monthKey];
+    }
+    if (closePrice !== null && refPrice && refPrice > 0 && refMcap && refMcap > 0) {
+      return Math.round(refMcap * (closePrice / refPrice));
+    }
+    return null;
+  };
+
+  const updatedYearly = company.yearlyData.map((rec, idx) => {
+    const isLatest = idx === company.yearlyData.length - 1;
+    const mk = rec.monthKey;
+    const closePrice = mk && typeof monthlyCloses[mk] === 'number' ? monthlyCloses[mk] : null;
+
+    let marketCapCr = rec.marketCapCr;
+    let sharePriceInr = rec.sharePriceInr;
+    if (hasMonthlyCloses) {
+      if (closePrice !== null) {
+        sharePriceInr = closePrice;
+        marketCapCr = computeMcapFromClose(mk, closePrice) ?? rec.marketCapCr;
+      } else if (!isLatest) {
+        sharePriceInr = null;
+        marketCapCr = null;
+      } else if (data.liveMarketCapCr) {
+        marketCapCr = data.liveMarketCapCr;
+        sharePriceInr = data.livePrice ?? rec.sharePriceInr;
+      }
+    }
+
+    let patCr = rec.patCr;
+    let revenueCr = rec.revenueCr;
+    let patMarginPct = rec.patMarginPct;
+    if (hasAnnualFin) {
+      const fin = annualFin[rec.period];
+      if (fin) {
+        patCr = fin.patCr;
+        revenueCr = fin.revenueCr ?? rec.revenueCr;
+        patMarginPct =
+          patCr !== null && revenueCr && revenueCr > 0
+            ? Number(((patCr / revenueCr) * 100).toFixed(2))
+            : null;
+      } else if (!isLatest) {
+        patCr = null;
+        revenueCr = null;
+        patMarginPct = null;
+      }
+    }
+
+    return {
+      ...rec,
+      marketCapCr,
+      sharePriceInr,
+      patCr,
+      revenueCr,
+      patMarginPct,
+    };
+  });
+
+  const updatedQuarterly = company.quarterlyData.map((rec, idx) => {
+    const isLatest = idx === company.quarterlyData.length - 1;
+    const mk = rec.monthKey;
+    const closePrice = mk && typeof monthlyCloses[mk] === 'number' ? monthlyCloses[mk] : null;
+
+    let marketCapCr = rec.marketCapCr;
+    let sharePriceInr = rec.sharePriceInr;
+    if (hasMonthlyCloses) {
+      if (closePrice !== null) {
+        sharePriceInr = closePrice;
+        marketCapCr = computeMcapFromClose(mk, closePrice) ?? rec.marketCapCr;
+      } else if (!isLatest) {
+        sharePriceInr = null;
+        marketCapCr = null;
+      } else if (data.liveMarketCapCr) {
+        marketCapCr = data.liveMarketCapCr;
+        sharePriceInr = data.livePrice ?? rec.sharePriceInr;
+      }
+    }
+
+    let patCr = rec.patCr;
+    let revenueCr = rec.revenueCr;
+    let patMarginPct = rec.patMarginPct;
+    if (hasQuarterlyFin) {
+      const fin = mk ? quarterlyFin[mk] : undefined;
+      if (fin) {
+        patCr = fin.patCr;
+        revenueCr = fin.revenueCr ?? rec.revenueCr;
+        patMarginPct =
+          patCr !== null && revenueCr && revenueCr > 0
+            ? Number(((patCr / revenueCr) * 100).toFixed(2))
+            : null;
+      } else if (!isLatest) {
+        patCr = null;
+        revenueCr = null;
+        patMarginPct = null;
+      }
+    }
+
+    return {
+      ...rec,
+      marketCapCr,
+      sharePriceInr,
+      patCr,
+      revenueCr,
+      patMarginPct,
+    };
+  });
+
+  return {
+    ...company,
+    yearlyData: updatedYearly,
+    quarterlyData: updatedQuarterly,
+  };
 }

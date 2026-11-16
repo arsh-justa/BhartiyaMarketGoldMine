@@ -8,13 +8,15 @@
  */
 
 export interface PeriodRecord {
-  period: string;        // e.g. "Q1 FY25" or "FY25"
-  label: string;         // e.g. "Jun 2024" or "FY 2024-25"
-  marketCapCr: number;   // Blue Y-Axis (in INR Crores)
-  patCr: number;         // Green Y-Axis (in INR Crores)
-  revenueCr: number;     // In INR Crores
-  patMarginPct: number;  // PAT / Revenue %
-  sharePriceInr: number; // Share Price in INR
+  period: string;             // e.g. "Q1 FY24" or "FY24"
+  label: string;              // e.g. "Jun 2023" or "FY 2023-24"
+  shortLabel?: string;        // e.g. "24 Jun" or "FY24"
+  monthKey?: string;          // e.g. "2023-06" for mapping live Yahoo Finance monthly data
+  marketCapCr: number | null; // Blue Y-Axis (in INR Crores)
+  patCr: number | null;       // Green Y-Axis (in INR Crores)
+  revenueCr: number | null;   // In INR Crores
+  patMarginPct: number | null;// PAT / Revenue %
+  sharePriceInr: number | null;// Share Price in INR
   eventNote?: string;
 }
 
@@ -42,19 +44,48 @@ export interface IndianCompany {
   yearlyData: PeriodRecord[];
 }
 
-export const QUARTER_PERIODS = [
-  "Q1 FY24", "Q2 FY24", "Q3 FY24", "Q4 FY24",
-  "Q1 FY25", "Q2 FY25", "Q3 FY25", "Q4 FY25",
-  "Q1 FY26", "Q2 FY26", "Q3 FY26", "Q4 FY26"
+export const YEARLY_PERIODS = [
+  "FY17", "FY18", "FY19", "FY20", "FY21",
+  "FY22", "FY23", "FY24", "FY25", "FY26"
 ];
 
-export const YEARLY_PERIODS = ["FY22", "FY23", "FY24", "FY25", "FY26"];
+interface QuarterMeta {
+  period: string;
+  label: string;
+  shortLabel: string;
+  monthKey: string;
+}
 
-const Q_LABELS = [
-  "Jun 2023", "Sep 2023", "Dec 2023", "Mar 2024",
-  "Jun 2024", "Sep 2024", "Dec 2024", "Mar 2025",
-  "Jun 2025", "Sep 2025", "Dec 2025", "Mar 2026"
-];
+const QUARTER_TIMELINE_10Y: QuarterMeta[] = (() => {
+  const result: QuarterMeta[] = [];
+  // 40 quarters (10 years) ending at Q2 FY27 (Sep 2026)
+  // Starts at Q3 FY17 (Dec 2016)
+  const monthNames: Record<number, string> = { 1: 'Jun', 2: 'Sep', 3: 'Dec', 4: 'Mar' };
+  const monthNums: Record<number, string> = { 1: '06', 2: '09', 3: '12', 4: '03' };
+
+  let fy = 17;
+  let q = 3;
+  for (let i = 0; i < 40; i++) {
+    const yy = String(fy).padStart(2, '0');
+    const calYear = q === 4 ? 2000 + fy : 2000 + fy - 1;
+    const monName = monthNames[q];
+    const monNum = monthNums[q];
+    result.push({
+      period: `Q${q} FY${yy}`,
+      label: `${monName} ${calYear}`,
+      shortLabel: `${yy} ${monName}`,
+      monthKey: `${calYear}-${monNum}`,
+    });
+    q++;
+    if (q > 4) {
+      q = 1;
+      fy++;
+    }
+  }
+  return result;
+})();
+
+export const QUARTER_PERIODS = QUARTER_TIMELINE_10Y.map(q => q.period);
 
 import { VERIFIED_LIVE_QUOTES } from './liveMarketQuotes';
 
@@ -109,14 +140,18 @@ export function buildCompanyRecord(
     activeCategory = 'Small Cap (₹500 Cr - ₹5k Cr)';
   }
 
-  // Generate 5 years historical (FY22 - FY26)
+  // Generate 10-year yearly slots (FY17 - FY26); earlier years start null until live history loads
+  const yearlyBaselineCount = 5;
   const yearlyData: PeriodRecord[] = YEARLY_PERIODS.map((period, i) => {
+    const fyNum = 17 + i;
+    const label = `FY 20${fyNum - 1}-${fyNum}`;
     const isLatest = i === YEARLY_PERIODS.length - 1;
     if (isLatest) {
-      // Latest active year uses EXACT live quote values
       return {
         period,
-        label: `FY 20${21 + i}-${22 + i}`,
+        label,
+        shortLabel: period,
+        monthKey: `20${fyNum}-03`,
         marketCapCr: currentMcapCr,
         patCr: annualPatFromPe,
         revenueCr: currentRevCr * 4,
@@ -126,6 +161,20 @@ export function buildCompanyRecord(
     }
 
     const yearsAgo = YEARLY_PERIODS.length - 1 - i;
+    if (yearsAgo >= yearlyBaselineCount) {
+      return {
+        period,
+        label,
+        shortLabel: period,
+        monthKey: `20${fyNum}-03`,
+        marketCapCr: null,
+        patCr: null,
+        revenueCr: null,
+        patMarginPct: null,
+        sharePriceInr: null,
+      };
+    }
+
     const factor = Math.pow(1 / growthFactor, yearsAgo);
     const mcap = Math.round(currentMcapCr * factor * (1 + (i % 2 === 0 ? 0.02 : -0.02)));
     const pat = Math.round(annualPatFromPe * factor * (1 + (i === 1 ? -0.03 : 0.02)));
@@ -135,7 +184,9 @@ export function buildCompanyRecord(
 
     return {
       period,
-      label: `FY 20${21 + i}-${22 + i}`,
+      label,
+      shortLabel: period,
+      monthKey: `20${fyNum}-03`,
       marketCapCr: mcap,
       patCr: pat,
       revenueCr: rev,
@@ -144,14 +195,16 @@ export function buildCompanyRecord(
     };
   });
 
-  // Generate 12 quarters historical (Q1 FY24 - Q4 FY26)
-  const quarterlyData: PeriodRecord[] = QUARTER_PERIODS.map((period, i) => {
-    const isLatest = i === QUARTER_PERIODS.length - 1;
+  // Generate 10-year quarterly slots (40 quarters); earlier quarters start null until live history loads
+  const quarterlyBaselineCount = 12;
+  const quarterlyData: PeriodRecord[] = QUARTER_TIMELINE_10Y.map((meta, i) => {
+    const isLatest = i === QUARTER_TIMELINE_10Y.length - 1;
     if (isLatest) {
-      // Latest active quarter uses EXACT live quote values
       return {
-        period,
-        label: Q_LABELS[i] || period,
+        period: meta.period,
+        label: meta.label,
+        shortLabel: meta.shortLabel,
+        monthKey: meta.monthKey,
         marketCapCr: currentMcapCr,
         patCr: currentPatCr,
         revenueCr: currentRevCr,
@@ -161,7 +214,21 @@ export function buildCompanyRecord(
       };
     }
 
-    const qAgo = QUARTER_PERIODS.length - 1 - i;
+    const qAgo = QUARTER_TIMELINE_10Y.length - 1 - i;
+    if (qAgo >= quarterlyBaselineCount) {
+      return {
+        period: meta.period,
+        label: meta.label,
+        shortLabel: meta.shortLabel,
+        monthKey: meta.monthKey,
+        marketCapCr: null,
+        patCr: null,
+        revenueCr: null,
+        patMarginPct: null,
+        sharePriceInr: null,
+      };
+    }
+
     const qFactor = Math.pow(1 / Math.pow(growthFactor, 0.25), qAgo);
     const seasonality = (i % 4 === 3) ? 1.05 : (i % 4 === 0) ? 0.96 : 1.0;
     const mcap = Math.round(currentMcapCr * qFactor * (1 + (Math.sin(i) * 0.02)));
@@ -171,14 +238,16 @@ export function buildCompanyRecord(
     const margin = Number(((pat / rev) * 100).toFixed(2));
 
     return {
-      period,
-      label: Q_LABELS[i] || period,
+      period: meta.period,
+      label: meta.label,
+      shortLabel: meta.shortLabel,
+      monthKey: meta.monthKey,
       marketCapCr: mcap,
       patCr: pat,
       revenueCr: rev,
       patMarginPct: margin,
       sharePriceInr: price,
-      eventNote: i === 7 ? "FY25 full year audited results" : undefined,
+      eventNote: meta.period === "Q4 FY25" ? "FY25 full year audited results" : undefined,
     };
   });
 
@@ -268,13 +337,18 @@ export const ALL_INDIAN_COMPANIES: IndianCompany[] = [
   buildCompanyRecord("unionbank", "Union Bank of India", "UNIONBANK", "532477", "Banking & Finance", "Public Banking", "Mega Cap (> ₹1 Lakh Cr)", "Mumbai, MH", ["CANBK", "BANKBARODA", "SBIN", "PNB"], 150382, 3850, 29800, 197.0, 8.1, 1.25, 2.45, 202.4, 115.8),
   buildCompanyRecord("yesbank", "Yes Bank Ltd", "YESBANK", "532648", "Banking & Finance", "Private Banking", "Large Cap (₹20k - ₹1 Lakh Cr)", "Mumbai, MH", ["IDFCFIRSTB", "FEDERALBNK", "INDUSINDBK"], 53458, 510, 8900, 17.03, 28.5, 1.28, 0.0, 26.2, 16.5),
   buildCompanyRecord("aubank", "AU Small Finance Bank", "AUBANK", "540611", "Banking & Finance", "Private Banking", "Large Cap (₹20k - ₹1 Lakh Cr)", "Jaipur, RJ", ["IDFCFIRSTB", "FEDERALBNK", "KOTAKBANK"], 69621, 570, 4200, 929.0, 32.4, 4.15, 0.35, 1045, 554),
+  buildCompanyRecord("southbank", "The South Indian Bank Ltd", "SOUTHBANK", "532218", "Banking & Finance", "Private Banking", "Mid Cap (₹5k - ₹20k Cr)", "Thrissur, KL", ["FEDERALBNK", "IDFCFIRSTB", "YESBANK", "AUBANK", "KOTAKBANK"], 15376, 325, 2450, 58.68, 11.8, 1.22, 0.52, 68.5, 24.8),
+  buildCompanyRecord("idbi", "IDBI Bank Ltd", "IDBI", "500116", "Banking & Finance", "Public Banking", "Large Cap (₹20k - ₹1 Lakh Cr)", "Mumbai, MH", ["SBIN", "BANKBARODA", "CANBK", "PNB"], 85686, 1780, 7850, 79.69, 13.5, 1.45, 1.85, 98.2, 62.5),
+  buildCompanyRecord("rblbank", "RBL Bank Ltd", "RBLBANK", "540065", "Banking & Finance", "Private Banking", "Large Cap (₹20k - ₹1 Lakh Cr)", "Mumbai, MH", ["FEDERALBNK", "IDFCFIRSTB", "YESBANK", "INDUSINDBK"], 58852, 410, 3650, 379.0, 15.2, 1.38, 0.65, 412.5, 215.0),
+  buildCompanyRecord("mcx", "Multi Commodity Exchange of India", "MCX", "534091", "Financial Services", "Commodity Derivatives Exchange", "Large Cap (₹20k - ₹1 Lakh Cr)", "Mumbai, MH", ["NSE", "BSE", "CDSL", "ANGELONE"], 90225, 185, 340, 3545.0, 54.2, 12.8, 0.72, 3950.0, 2850.0),
+  buildCompanyRecord("cdsl", "Central Depository Services", "CDSL", "540716", "Financial Services", "Securities Depository", "Large Cap (₹20k - ₹1 Lakh Cr)", "Mumbai, MH", ["NSE", "BSE", "MCX", "ANGELONE"], 155003, 232, 455, 3816.6, 51, 17.03, 0.26, 4446.8, 2377.4),
+  buildCompanyRecord("bse", "BSE Limited", "BSE", "540565", "Financial Services", "Stock Exchange & Derivatives", "Large Cap (₹20k - ₹1 Lakh Cr)", "Mumbai, MH", ["NSE", "CDSL", "MCX", "ANGELONE"], 155003, 345, 680, 3816.6, 51, 17.03, 0.26, 4446.8, 2377.4),
+  buildCompanyRecord("nse", "National Stock Exchange of India Ltd", "NSE", "544001", "Financial Services", "Stock Exchange & Derivatives", "Mega Cap (> ₹1 Lakh Cr)", "Mumbai, MH", ["BSE", "CDSL", "MCX", "ANGELONE"], 248500, 2180, 4850, 4970.0, 31.5, 8.9, 1.82, 5450.0, 3120.0),
+  buildCompanyRecord("angelone", "Angel One Ltd", "ANGELONE", "543235", "Financial Services", "Digital Retail Broking", "Large Cap (₹20k - ₹1 Lakh Cr)", "Mumbai, MH", ["NSE", "BSE", "CDSL", "PAYTM"], 30931, 420, 1480, 338, 27.3, 4.63, 1.91, 360.45, 208.63),
   buildCompanyRecord("bajfinance", "Bajaj Finance Ltd", "BAJFINANCE", "500034", "Financial Services", "NBFC & Consumer Lending", "Mega Cap (> ₹1 Lakh Cr)", "Pune, MH", ["BAJAJFINSV", "SHRIRAMFIN", "CHOLAFIN"], 227073, 4450, 17200, 965, 16.1, 2.04, 1.3, 1153.7, 803.9),
   buildCompanyRecord("bajajfinsv", "Bajaj Finserv Ltd", "BAJAJFINSV", "532978", "Financial Services", "Financial Holding & Insurance", "Mega Cap (> ₹1 Lakh Cr)", "Pune, MH", ["BAJFINANCE", "HDFCLIFE", "SBILIFE"], 293949, 2380, 31500, 1836.9, 27.8, 3.5, 0.07, 2118.5, 1597),
   buildCompanyRecord("shriramfin", "Shriram Finance Ltd", "SHRIRAMFIN", "511218", "Financial Services", "Commercial Vehicle NBFC", "Mega Cap (> ₹1 Lakh Cr)", "Chennai, TN", ["BAJFINANCE", "CHOLAFIN", "MUTHOOTFIN"], 227073, 2150, 9800, 965, 16.1, 2.04, 1.3, 1153.7, 803.9),
   buildCompanyRecord("muthootfin", "Muthoot Finance Ltd", "MUTHOOTFIN", "533398", "Financial Services", "Gold Financing & Lending", "Large Cap (₹20k - ₹1 Lakh Cr)", "Kochi, KL", ["MANAPPURAM", "BAJFINANCE"], 117132, 1380, 4200, 2917.6, 9.6, 2.67, 1.03, 4149.5, 2305),
-  buildCompanyRecord("cdsl", "Central Depository Services", "CDSL", "540716", "Financial Services", "Securities Depository", "Large Cap (₹20k - ₹1 Lakh Cr)", "Mumbai, MH", ["BSE", "MCX", "ANGELONE"], 155003, 232, 455, 3816.6, 51, 17.03, 0.26, 4446.8, 2377.4),
-  buildCompanyRecord("bse", "BSE Limited", "BSE", "540565", "Financial Services", "Stock Exchange & Derivatives", "Large Cap (₹20k - ₹1 Lakh Cr)", "Mumbai, MH", ["CDSL", "MCX", "ANGELONE"], 155003, 345, 680, 3816.6, 51, 17.03, 0.26, 4446.8, 2377.4),
-  buildCompanyRecord("angelone", "Angel One Ltd", "ANGELONE", "543235", "Financial Services", "Digital Retail Broking", "Large Cap (₹20k - ₹1 Lakh Cr)", "Mumbai, MH", ["BSE", "CDSL", "PAYTM"], 30931, 420, 1480, 338, 27.3, 4.63, 1.91, 360.45, 208.63),
   buildCompanyRecord("recltd", "REC Limited", "RECLTD", "532955", "Financial Services", "Power & Infrastructure NBFC", "Mega Cap (> ₹1 Lakh Cr)", "New Delhi, DL", ["PFC", "IRFC", "IREDA"], 109122, 4120, 14200, 83.5, 14.8, 1.8, 2.63, 137.17, 73.05),
   buildCompanyRecord("pfc", "Power Finance Corporation", "PFC", "532810", "Financial Services", "Power & Energy NBFC", "Mega Cap (> ₹1 Lakh Cr)", "New Delhi, DL", ["RECLTD", "IRFC", "IREDA"], 109122, 4650, 25200, 83.5, 14.8, 1.8, 2.63, 137.17, 73.05),
   buildCompanyRecord("irfc", "Indian Railway Finance Corp", "IRFC", "543257", "Financial Services", "Rail Infrastructure Financing", "Mega Cap (> ₹1 Lakh Cr)", "New Delhi, DL", ["RECLTD", "PFC", "IREDA"], 109122, 1850, 7100, 83.5, 14.8, 1.8, 2.63, 137.17, 73.05),
@@ -370,18 +444,52 @@ export const ALL_INDIAN_COMPANIES: IndianCompany[] = [
   buildCompanyRecord("tatacomm", "Tata Communications Ltd", "TATACOMM", "500483", "Telecom", "Enterprise Data & Cloud Infrastructure", "Large Cap (₹20k - ₹1 Lakh Cr)", "Mumbai, MH", ["BHARTIARTL", "INDUSTOWER", "TCS"], 48476, 310, 5800, 1700.4, 44, 14.26, 1.03, 2110, 1322.5),
 ];
 
+export const NSE_DEFAULT_BENCHMARK: IndianCompany = buildCompanyRecord(
+  "nse",
+  "National Stock Exchange (NIFTY 50)",
+  "NSE",
+  "NIFTY50",
+  "Market Index",
+  "NSE Listed Universe",
+  "Mega Cap (> ₹1 Lakh Cr)",
+  "Mumbai, MH",
+  ["RELIANCE", "TCS", "HDFCBANK", "BHARTIARTL", "ICICIBANK", "INFY", "SBIN", "LT", "ITC", "HINDUNILVR"],
+  24250000,
+  265000,
+  2150000,
+  25144.3,
+  22.8,
+  3.62,
+  1.24,
+  26373.2,
+  22179.9,
+  1.15
+);
+
 // Fallback resolver: If a user enters or searches ANY custom Indian ticker/name not in the 130 list,
 // generate an authentic company record dynamically so search NEVER fails!
 export function resolveOrGenerateCompany(query: string): IndianCompany | null {
   if (!query || query.trim().length < 2) return null;
   const q = query.trim().toUpperCase();
+  if (q === 'NSE' || q === 'NIFTY' || q === 'NIFTY 50' || q === 'NIFTY50' || q.includes('NATIONAL STOCK EXCHANGE')) {
+    return NSE_DEFAULT_BENCHMARK;
+  }
 
-  // 1. Direct match in preloaded list
-  const existing = ALL_INDIAN_COMPANIES.find(
-    c => c.symbol.toUpperCase() === q ||
-         c.name.toUpperCase().includes(q) ||
-         c.bseCode === q
-  );
+  // 1. Direct and resilient match in preloaded list
+  const qClean = q.replace(/[^A-Z0-9]/g, '');
+  const existing = ALL_INDIAN_COMPANIES.find(c => {
+    const sClean = c.symbol.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const nClean = c.name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return (
+      c.symbol.toUpperCase() === q ||
+      sClean === qClean ||
+      c.bseCode === query.trim() ||
+      c.name.toUpperCase().includes(q) ||
+      nClean.includes(qClean) ||
+      (qClean.includes('SOUTHINDIA') && nClean.includes('SOUTHINDIAN')) ||
+      (qClean.includes('SOUTHBANK') && sClean.includes('SOUTHBANK'))
+    );
+  });
   if (existing) return existing;
 
   // 2. Generate on the fly for any valid listed query
