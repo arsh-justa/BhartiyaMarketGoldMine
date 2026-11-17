@@ -21,6 +21,7 @@ interface DualAxisFinancialChartProps {
   onPeriodTypeChange: (type: 'quarterly' | 'yearly') => void;
   quarterlyData: PeriodRecord[];
   yearlyData: PeriodRecord[];
+  theme?: 'dark' | 'light';
 }
 
 export type ChartMode = 'dual-line' | 'normalized';
@@ -43,7 +44,9 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
   onPeriodTypeChange,
   quarterlyData,
   yearlyData,
+  theme = 'dark',
 }) => {
+  const isDark = theme !== 'light';
   const chartId = useId();
   const [chartMode, setChartMode] = useState<ChartMode>('dual-line');
   const [quarterRange, setQuarterRange] = useState<'4Q' | '8Q' | '12Q' | '10Y'>('10Y');
@@ -236,19 +239,19 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
       : 0;
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-2xl relative">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm dark:shadow-2xl relative transition-colors">
       {/* Top Controls Toolbar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+            <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
               <span>{companyName}</span>
-              <span className="text-xs font-mono px-2 py-0.5 rounded bg-blue-950 border border-blue-800/80 text-blue-300">
+              <span className="text-xs font-mono px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800/80 text-blue-700 dark:text-blue-300">
                 {symbol}
               </span>
             </h2>
           </div>
-          <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
+          <div className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 flex items-center gap-2">
             <span>{sector}</span>
             <span aria-hidden="true">·</span>
             <span className="capitalize">{periodType} Frequency</span>
@@ -257,14 +260,14 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
 
         {/* Toolbar Controls */}
         <div className="flex flex-wrap items-center gap-3">
-          {/* YEARLY VS QUARTERLY TOGGLE (User Request 2) */}
-          <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs font-semibold">
+          {/* YEARLY VS QUARTERLY TOGGLE */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-semibold">
             <button
               onClick={() => onPeriodTypeChange('quarterly')}
               className={`px-3 py-1.5 rounded-md transition-all ${
                 periodType === 'quarterly'
                   ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               Quarterly
@@ -274,7 +277,7 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
               className={`px-3 py-1.5 rounded-md transition-all ${
                 periodType === 'yearly'
                   ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               Yearly (Annual)
@@ -283,7 +286,7 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
 
           {/* Sub-Range for Quarterly (10Y default) */}
           {periodType === 'quarterly' && (
-            <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+            <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-lg border border-slate-200 dark:border-slate-800 text-xs">
               {(['4Q', '8Q', '12Q', '10Y'] as const).map(q => (
                 <button
                   key={q}
@@ -291,8 +294,8 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                   onClick={() => setQuarterRange(q)}
                   className={`px-2.5 py-1.5 rounded-md transition-all ${
                     quarterRange === q
-                      ? 'bg-slate-800 text-white font-semibold'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold shadow-sm dark:shadow-none'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   {q}
@@ -302,16 +305,18 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
           )}
 
           {/* Display Mode (Market Price or Normalized % Growth) */}
-          <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-lg border border-slate-200 dark:border-slate-800 text-xs">
             <button
               type="button"
               onClick={() => setChartMode('dual-line')}
               title="Market Price"
               className={`px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
-                chartMode === 'dual-line' ? 'bg-slate-800 text-white font-medium' : 'text-slate-400 hover:text-white'
+                chartMode === 'dual-line'
+                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium shadow-sm dark:shadow-none'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <TrendingUp className="w-3.5 h-3.5 text-blue-400" />
+              <TrendingUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
               <span>Market Price</span>
             </button>
             <button
@@ -319,10 +324,12 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
               onClick={() => setChartMode('normalized')}
               title="Normalized Growth"
               className={`px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
-                chartMode === 'normalized' ? 'bg-slate-800 text-white font-medium' : 'text-slate-400 hover:text-white'
+                chartMode === 'normalized'
+                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium shadow-sm dark:shadow-none'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Maximize2 className="w-3.5 h-3.5 text-purple-400" />
+              <Maximize2 className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
               <span>% Growth</span>
             </button>
           </div>
@@ -337,13 +344,13 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
             onClick={() => setShowMarketCap(!showMarketCap)}
             className={`flex items-center gap-2 px-2.5 py-1 rounded transition-colors border ${
               showMarketCap
-                ? 'bg-blue-950/40 border-blue-800/80 text-blue-300'
-                : 'bg-slate-950 border-slate-800 text-slate-500 opacity-50'
+                ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800/80 text-blue-800 dark:text-blue-300'
+                : 'bg-slate-100 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500 opacity-60'
             }`}
           >
             <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm" />
             <span className="font-semibold">Market Cap</span>
-            <span className="font-mono text-blue-400 font-bold">
+            <span className="font-mono text-blue-700 dark:text-blue-400 font-bold">
               {(hoveredIdx !== null ? activeRecord?.marketCapCr : latestValidMcapRec?.marketCapCr) !== null &&
               (hoveredIdx !== null ? activeRecord?.marketCapCr : latestValidMcapRec?.marketCapCr) !== undefined
                 ? formatInrCrores((hoveredIdx !== null ? activeRecord?.marketCapCr : latestValidMcapRec?.marketCapCr) as number, true)
@@ -356,13 +363,13 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
             onClick={() => setShowPat(!showPat)}
             className={`flex items-center gap-2 px-2.5 py-1 rounded transition-colors border ${
               showPat
-                ? 'bg-emerald-950/40 border-emerald-800/80 text-emerald-300'
-                : 'bg-slate-950 border-slate-800 text-slate-500 opacity-50'
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80 text-emerald-800 dark:text-emerald-300'
+                : 'bg-slate-100 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500 opacity-60'
             }`}
           >
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm" />
             <span className="font-semibold">PAT (Net Profit)</span>
-            <span className="font-mono text-emerald-400 font-bold">
+            <span className="font-mono text-emerald-700 dark:text-emerald-400 font-bold">
               {(hoveredIdx !== null ? activeRecord?.patCr : latestValidPatRec?.patCr) !== null &&
               (hoveredIdx !== null ? activeRecord?.patCr : latestValidPatRec?.patCr) !== undefined
                 ? formatInrCrores((hoveredIdx !== null ? activeRecord?.patCr : latestValidPatRec?.patCr) as number, false)
@@ -371,20 +378,20 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
           </button>
 
           {showPat && filteredData.some(d => d.patCr === null) && (
-            <span className="flex items-center gap-1.5 px-2 py-1 text-[11px] text-slate-400">
-              <span className="w-2 h-2 rounded-full bg-slate-500 inline-block" />
+            <span className="flex items-center gap-1.5 px-2 py-1 text-[11px] text-slate-600 dark:text-slate-400">
+              <span className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500 inline-block" />
               <span>No PAT information</span>
             </span>
           )}
         </div>
 
-        <div className="hidden sm:flex items-center gap-3 text-slate-400 font-mono text-xs">
+        <div className="hidden sm:flex items-center gap-3 text-slate-600 dark:text-slate-400 font-mono text-xs">
           <span>Change:</span>
-          <span className={mcapDeltaPct >= 0 ? 'text-blue-400' : 'text-rose-400'}>
+          <span className={mcapDeltaPct >= 0 ? 'text-blue-700 dark:text-blue-400' : 'text-rose-600 dark:text-rose-400'}>
             M-Cap {formatPercentage(mcapDeltaPct)}
           </span>
-          <span className="text-slate-600">·</span>
-          <span className={patDeltaPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+          <span className="text-slate-400 dark:text-slate-600">·</span>
+          <span className={patDeltaPct >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
             PAT {formatPercentage(patDeltaPct)}
           </span>
         </div>
@@ -430,15 +437,15 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
             y={margin.top}
             width={innerWidth}
             height={innerHeight}
-            fill="#090d16"
-            stroke="#1e293b"
+            fill={isDark ? '#090d16' : '#f8fafc'}
+            stroke={isDark ? '#1e293b' : '#cbd5e1'}
             strokeWidth="1"
             rx="4"
           />
 
           {/* Grid lines */}
           {showGrid && (
-            <g opacity="0.6">
+            <g opacity={isDark ? '0.6' : '0.85'}>
               {mcapTicks.map((tick, i) => (
                 <line
                   key={`hgrid-${i}`}
@@ -446,7 +453,7 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                   y1={tick.y}
                   x2={margin.left + innerWidth}
                   y2={tick.y}
-                  stroke="#1e293b"
+                  stroke={isDark ? '#1e293b' : '#e2e8f0'}
                   strokeDasharray="3 3"
                 />
               ))}
@@ -457,7 +464,7 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                   y1={margin.top}
                   x2={getX(i)}
                   y2={margin.top + innerHeight}
-                  stroke="#1e293b"
+                  stroke={isDark ? '#1e293b' : '#e2e8f0'}
                   strokeDasharray="2 4"
                 />
               ))}
@@ -472,7 +479,7 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                 y1={margin.top}
                 x2={margin.left}
                 y2={margin.top + innerHeight}
-                stroke="#3b82f6"
+                stroke={isDark ? '#3b82f6' : '#2563eb'}
                 strokeWidth="2"
               />
               <text
@@ -480,7 +487,7 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                 y={22}
                 transform="rotate(-90)"
                 textAnchor="middle"
-                fill="#60a5fa"
+                fill={isDark ? '#60a5fa' : '#1d4ed8'}
                 fontSize="11"
                 fontWeight="700"
                 className="font-mono uppercase tracking-wider"
@@ -489,12 +496,12 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
               </text>
               {(chartMode === 'normalized' ? normTicks : mcapTicks).map((t, idx) => (
                 <g key={`mcap-tick-${idx}`} transform={`translate(${margin.left}, ${t.y})`}>
-                  <line x1="-5" y1="0" x2="0" y2="0" stroke="#3b82f6" strokeWidth="1.5" />
+                  <line x1="-5" y1="0" x2="0" y2="0" stroke={isDark ? '#3b82f6' : '#2563eb'} strokeWidth="1.5" />
                   <text
                     x="-9"
                     y="3.5"
                     textAnchor="end"
-                    fill="#93c5fd"
+                    fill={isDark ? '#93c5fd' : '#1e40af'}
                     fontSize="10"
                     className="font-mono tabular-nums"
                   >
@@ -515,7 +522,7 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                 y1={margin.top}
                 x2={margin.left + innerWidth}
                 y2={margin.top + innerHeight}
-                stroke="#10b981"
+                stroke={isDark ? '#10b981' : '#059669'}
                 strokeWidth="2"
               />
               <text
@@ -523,7 +530,7 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                 y={-(width - 22)}
                 transform="rotate(90)"
                 textAnchor="middle"
-                fill="#34d399"
+                fill={isDark ? '#34d399' : '#047857'}
                 fontSize="11"
                 fontWeight="700"
                 className="font-mono uppercase tracking-wider"
@@ -532,12 +539,12 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
               </text>
               {(chartMode === 'normalized' ? normTicks : patTicks).map((t, idx) => (
                 <g key={`pat-tick-${idx}`} transform={`translate(${margin.left + innerWidth}, ${t.y})`}>
-                  <line x1="0" y1="0" x2="5" y2="0" stroke="#10b981" strokeWidth="1.5" />
+                  <line x1="0" y1="0" x2="5" y2="0" stroke={isDark ? '#10b981' : '#059669'} strokeWidth="1.5" />
                   <text
                     x="9"
                     y="3.5"
                     textAnchor="start"
-                    fill="#6ee7b7"
+                    fill={isDark ? '#6ee7b7' : '#065f46'}
                     fontSize="10"
                     className="font-mono tabular-nums"
                   >
@@ -557,7 +564,7 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
               y1="0"
               x2={margin.left + innerWidth}
               y2="0"
-              stroke="#334155"
+              stroke={isDark ? '#334155' : '#cbd5e1'}
               strokeWidth="1.5"
             />
             {filteredData.map((d, i) => {
@@ -572,7 +579,7 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                     y1="0"
                     x2="0"
                     y2={showLabel ? '5' : '3'}
-                    stroke="#475569"
+                    stroke={isDark ? '#475569' : '#94a3b8'}
                     strokeWidth="1"
                   />
                   {showLabel && (
@@ -582,7 +589,11 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                         y="12"
                         transform="rotate(-45 0 12)"
                         textAnchor="end"
-                        fill={hoveredIdx === i ? '#ffffff' : '#cbd5e1'}
+                        fill={
+                          hoveredIdx === i
+                            ? (isDark ? '#ffffff' : '#0f172a')
+                            : (isDark ? '#cbd5e1' : '#475569')
+                        }
                         fontSize="10"
                         fontWeight={hoveredIdx === i ? '700' : '600'}
                         className="font-mono"
@@ -594,7 +605,11 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                         x="0"
                         y="20"
                         textAnchor="middle"
-                        fill={hoveredIdx === i ? '#ffffff' : '#cbd5e1'}
+                        fill={
+                          hoveredIdx === i
+                            ? (isDark ? '#ffffff' : '#0f172a')
+                            : (isDark ? '#cbd5e1' : '#475569')
+                        }
                         fontSize="11"
                         fontWeight={hoveredIdx === i ? '700' : '600'}
                         className="font-mono"
@@ -700,8 +715,8 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                     cx={getX(i)}
                     cy={margin.top + innerHeight - 8}
                     r={hoveredIdx === i ? 6 : isDenseTimeline ? 3.2 : 4.2}
-                    fill="#64748b"
-                    stroke={hoveredIdx === i ? '#e2e8f0' : '#94a3b8'}
+                    fill={isDark ? '#64748b' : '#94a3b8'}
+                    stroke={hoveredIdx === i ? (isDark ? '#e2e8f0' : '#0f172a') : (isDark ? '#94a3b8' : '#64748b')}
                     strokeWidth={hoveredIdx === i ? 2.5 : 1}
                     opacity={hoveredIdx === i ? 1 : 0.85}
                   />
@@ -718,7 +733,7 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                 y1={margin.top}
                 x2={getX(hoveredIdx)}
                 y2={margin.top + innerHeight}
-                stroke="#94a3b8"
+                stroke={isDark ? '#94a3b8' : '#64748b'}
                 strokeWidth="1.5"
                 strokeDasharray="4 4"
               />
@@ -749,7 +764,7 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
                   cx={getX(hoveredIdx)}
                   cy={margin.top + innerHeight - 8}
                   r="7"
-                  fill="#64748b"
+                  fill={isDark ? '#64748b' : '#94a3b8'}
                   stroke="#ffffff"
                   strokeWidth="2"
                 />
@@ -776,67 +791,67 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
 
           return (
             <div
-              className="absolute z-20 pointer-events-none bg-slate-950/95 backdrop-blur-md border border-slate-700 p-3 sm:p-3.5 rounded-lg shadow-2xl text-xs min-w-[210px] sm:min-w-[250px] max-w-[calc(100%-0.5rem)] transform -translate-x-1/2 -translate-y-full transition-all"
+              className="absolute z-20 pointer-events-none bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border border-slate-200 dark:border-slate-700 p-3 sm:p-3.5 rounded-lg shadow-xl dark:shadow-2xl text-xs min-w-[210px] sm:min-w-[250px] max-w-[calc(100%-0.5rem)] transform -translate-x-1/2 -translate-y-full transition-all"
               style={{
                 left: `${Math.min(72, Math.max(28, (getX(hoveredIdx) / width) * 100))}%`,
                 top: `${Math.max(16, (minY / height) * 100 - 4)}%`,
               }}
             >
-              <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
-                <span className="font-bold text-white flex items-center gap-1.5 font-mono">
-                  <Calendar className="w-3.5 h-3.5 text-blue-400" />
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 dark:border-slate-800">
+                <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 font-mono">
+                  <Calendar className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                   <span>{rec.period}</span>
-                  <span className="text-slate-400 font-normal">({rec.label})</span>
+                  <span className="text-slate-500 dark:text-slate-400 font-normal">({rec.label})</span>
                 </span>
               </div>
 
               <div className="mt-2 space-y-1.5 font-mono">
-                <div className="flex items-center justify-between text-blue-300">
+                <div className="flex items-center justify-between text-blue-700 dark:text-blue-300">
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-blue-500" />
-                    <span className="font-sans text-slate-300">Market Cap:</span>
+                    <span className="font-sans text-slate-700 dark:text-slate-300">Market Cap:</span>
                   </span>
-                  <span className={rec.marketCapCr !== null ? 'font-bold text-blue-400' : 'font-sans text-slate-400'}>
+                  <span className={rec.marketCapCr !== null ? 'font-bold text-blue-700 dark:text-blue-400' : 'font-sans text-slate-500 dark:text-slate-400'}>
                     {rec.marketCapCr !== null ? formatInrCrores(rec.marketCapCr, true) : 'no information'}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between text-emerald-300">
+                <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-300">
                   <span className="flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${rec.patCr !== null ? 'bg-emerald-500' : 'bg-slate-500'}`} />
-                    <span className="font-sans text-slate-300">PAT:</span>
+                    <span className={`w-2 h-2 rounded-full ${rec.patCr !== null ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-slate-500'}`} />
+                    <span className="font-sans text-slate-700 dark:text-slate-300">PAT:</span>
                   </span>
-                  <span className={rec.patCr !== null ? 'font-bold text-emerald-400' : 'font-sans text-slate-400'}>
+                  <span className={rec.patCr !== null ? 'font-bold text-emerald-700 dark:text-emerald-400' : 'font-sans text-slate-500 dark:text-slate-400'}>
                     {rec.patCr !== null ? formatInrCrores(rec.patCr, false) : 'no information'}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between text-slate-400 pt-1 border-t border-slate-800/80 text-[11px]">
+                <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200 dark:border-slate-800/80 text-[11px]">
                   <span className="font-sans">Revenue:</span>
-                  <span className={rec.revenueCr !== null ? 'text-slate-200' : 'font-sans text-slate-400'}>
+                  <span className={rec.revenueCr !== null ? 'text-slate-900 dark:text-slate-200' : 'font-sans text-slate-500 dark:text-slate-400'}>
                     {rec.revenueCr !== null ? `₹${rec.revenueCr.toLocaleString('en-IN')} Cr` : 'no information'}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px]">
                   <span className="font-sans">PAT Margin:</span>
-                  <span className={rec.patMarginPct !== null ? 'text-emerald-300 font-semibold' : 'font-sans text-slate-400'}>
+                  <span className={rec.patMarginPct !== null ? 'text-emerald-700 dark:text-emerald-300 font-semibold' : 'font-sans text-slate-500 dark:text-slate-400'}>
                     {rec.patMarginPct !== null ? `${rec.patMarginPct}%` : 'no information'}
                   </span>
                 </div>
 
                 {chartMode === 'normalized' ? (
-                  <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                  <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px]">
                     <span className="font-sans">Growth %:</span>
-                    <span className="text-purple-300 font-semibold">
+                    <span className="text-purple-700 dark:text-purple-300 font-semibold">
                       M-Cap {mcapGrowth !== null ? formatPercentage(mcapGrowth) : 'no information'} · PAT{' '}
                       {patGrowth !== null ? formatPercentage(patGrowth) : 'no information'}
                     </span>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                  <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px]">
                     <span className="font-sans">Close Price:</span>
-                    <span className="text-slate-200">
+                    <span className="text-slate-900 dark:text-slate-200">
                       {rec.sharePriceInr !== null ? `₹${rec.sharePriceInr.toLocaleString('en-IN')}` : '—'}
                     </span>
                   </div>
@@ -844,8 +859,8 @@ export const DualAxisFinancialChart: React.FC<DualAxisFinancialChartProps> = ({
               </div>
 
               {rec.eventNote && (
-                <div className="mt-2 pt-1.5 border-t border-slate-800 text-[10.5px] text-amber-300/90 leading-tight flex items-start gap-1">
-                  <Info className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+                <div className="mt-2 pt-1.5 border-t border-slate-200 dark:border-slate-800 text-[10.5px] text-amber-700 dark:text-amber-300/90 leading-tight flex items-start gap-1">
+                  <Info className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                   <span>{rec.eventNote}</span>
                 </div>
               )}

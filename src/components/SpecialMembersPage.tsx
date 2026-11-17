@@ -60,7 +60,7 @@ function getTimeBarColorStyle(days: number): React.CSSProperties {
 export const SpecialMembersPage: React.FC<SpecialMembersPageProps> = ({ onBack }) => {
   const [copiedUpi, setCopiedUpi] = useState<boolean>(false);
   const [qrLoadError, setQrLoadError] = useState<boolean>(false);
-  const [serverDays, setServerDays] = useState<number>(14);
+  const [serverDays, setServerDays] = useState<number>(100);
   const [isUpdatingDays, setIsUpdatingDays] = useState<boolean>(false);
 
   useEffect(() => {
@@ -134,13 +134,13 @@ export const SpecialMembersPage: React.FC<SpecialMembersPageProps> = ({ onBack }
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to Market Dashboard</span>
         </button>
 
-        <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400">
+        <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
           <span>Bhartiya Market</span>
           <span aria-hidden="true">·</span>
           <span>Special Members</span>
@@ -150,15 +150,18 @@ export const SpecialMembersPage: React.FC<SpecialMembersPageProps> = ({ onBack }
       {/* Centered Focal Payment & Server Time Card */}
       <section
         aria-label="Buy some server time via PhonePe UPI"
-        className="max-w-xl mx-auto bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6"
+        className="max-w-xl mx-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6 shadow-sm dark:shadow-none transition-colors"
       >
-        {/* Above QR Code: "Buy some server time" + 1000-Day Horizontal Bar */}
-        <div className="space-y-3 pb-5 border-b border-slate-800">
+        {/* Above QR Code: "Support Us" heading + "Buy some server time" + 1000-Day Horizontal Bar */}
+        <div className="space-y-3 pb-5 border-b border-slate-200 dark:border-slate-800">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Support Us
+          </h1>
           <div className="flex items-center justify-between gap-3">
-            <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2">
-              <Clock className="w-5 h-5 text-blue-400 shrink-0" />
+            <h2 className="text-base sm:text-lg font-semibold tracking-tight text-slate-700 dark:text-slate-200 flex items-center gap-2">
+              <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400 shrink-0" />
               <span>Buy some server time</span>
-            </h1>
+            </h2>
           </div>
 
           {/* 1000-Day Horizontal Progress Bar */}
@@ -168,7 +171,7 @@ export const SpecialMembersPage: React.FC<SpecialMembersPageProps> = ({ onBack }
             aria-valuemin={0}
             aria-valuemax={MAX_SERVER_DAYS}
             aria-label="Server time remaining"
-            className="w-full h-3.5 bg-slate-950 border border-slate-800 rounded-full overflow-hidden"
+            className="w-full h-3.5 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-full overflow-hidden"
           >
             <div
               className="h-full transition-all duration-300 rounded-full"
@@ -180,7 +183,7 @@ export const SpecialMembersPage: React.FC<SpecialMembersPageProps> = ({ onBack }
           </div>
 
           <div className="flex items-center justify-end">
-            <span className="text-xs font-mono tabular-nums text-slate-400">
+            <span className="text-xs font-mono tabular-nums text-slate-600 dark:text-slate-400">
               2 years
             </span>
           </div>
@@ -192,7 +195,7 @@ export const SpecialMembersPage: React.FC<SpecialMembersPageProps> = ({ onBack }
             href={PHONEPE_URL}
             onClick={handleExtendServerTime}
             aria-label="Scan QR code or click to redirect to PhonePe and pay"
-            className="group block w-full max-w-[270px] bg-white rounded-xl p-4 shadow-sm hover:ring-2 hover:ring-blue-500 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="group block w-full max-w-[270px] bg-white border border-slate-200 dark:border-transparent rounded-xl p-4 shadow-sm hover:ring-2 hover:ring-blue-500 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             {!qrLoadError ? (
               <img
@@ -217,10 +220,10 @@ export const SpecialMembersPage: React.FC<SpecialMembersPageProps> = ({ onBack }
           </a>
 
           {/* Copyable UPI ID Line */}
-          <div className="w-full flex items-center justify-between gap-2 px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-lg">
+          <div className="w-full flex items-center justify-between gap-2 px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg">
             <div className="min-w-0">
-              <span className="text-[11px] text-slate-400 block">UPI ID</span>
-              <span className="text-xs sm:text-sm font-mono font-semibold text-white truncate block">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 block">UPI ID</span>
+              <span className="text-xs sm:text-sm font-mono font-semibold text-slate-900 dark:text-white truncate block">
                 {UPI_ID}
               </span>
             </div>
@@ -228,12 +231,12 @@ export const SpecialMembersPage: React.FC<SpecialMembersPageProps> = ({ onBack }
             <button
               type="button"
               onClick={handleCopyUpi}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-transparent text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               {copiedUpi ? (
                 <>
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-emerald-400">Copied</span>
+                  <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-emerald-700 dark:text-emerald-400">Copied</span>
                 </>
               ) : (
                 <>
@@ -246,7 +249,7 @@ export const SpecialMembersPage: React.FC<SpecialMembersPageProps> = ({ onBack }
         </div>
 
         {/* Primary PhonePe Redirect CTA + Universal UPI App Link */}
-        <div className="space-y-2.5 pt-3 border-t border-slate-800">
+        <div className="space-y-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
           <a
             href={PHONEPE_URL}
             onClick={handleExtendServerTime}
@@ -261,7 +264,7 @@ export const SpecialMembersPage: React.FC<SpecialMembersPageProps> = ({ onBack }
             <a
               href={UNIVERSAL_UPI_URL}
               onClick={handleExtendServerTime}
-              className="inline-flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-slate-400 hover:text-white transition-colors underline underline-offset-4"
+              className="inline-flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors underline underline-offset-4"
             >
               <span>Or pay using any UPI app (GPay, Paytm, BHIM)</span>
               <ExternalLink className="w-3 h-3 shrink-0" />

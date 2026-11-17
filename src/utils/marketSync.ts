@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  * 
  * Market Data Synchronization Manager for Indian Publicly Listed Companies.
- * Powered by Yahoo Finance (NSE: .NS / BSE: .BO) via server proxy route.
+ * Powered by NSE / BSE live market feeds via server proxy route.
  * Handles automatic 1st-of-the-month sync check and manual refresh triggers.
  */
 
@@ -168,7 +168,7 @@ export async function executeMarketSync(
           ...updatedQuarterly[lastQIndex],
           marketCapCr: newMcapCr,
           sharePriceInr: newPrice,
-          eventNote: `Live synced via Yahoo Finance (₹${newMcapCr.toLocaleString('en-IN')} Cr)`,
+          eventNote: `Live synced market cap (₹${newMcapCr.toLocaleString('en-IN')} Cr)`,
         };
       }
 
@@ -217,7 +217,7 @@ export async function executeMarketSync(
         success: true,
         syncedAt: new Date().toISOString(),
         updatedCount,
-        source: 'Yahoo Finance (NSE / BSE)',
+        source: 'NSE / BSE Live Market Feed',
       },
     };
   } catch (err: any) {

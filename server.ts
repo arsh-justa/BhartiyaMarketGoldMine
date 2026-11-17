@@ -1,5 +1,5 @@
 /**
- * Express backend proxy server for Yahoo Finance and Vite SPA middleware.
+ * Express backend proxy server for Indian equity market data and Vite SPA middleware.
  */
 import express, { Request, Response } from 'express';
 import { createServer as createViteServer } from 'vite';
@@ -34,7 +34,7 @@ const CACHE_TTL_MS = 15 * 60 * 1000;
 app.get('/api/stock/status', (_req: Request, res: Response) => {
   res.json({
     status: 'online',
-    source: 'Yahoo Finance (NSE / BSE)',
+    source: 'NSE / BSE Live Market Feed',
     method: 'Automated 1st-of-month cadence + On-demand top-left manual refresh',
     cachedQuotes: quoteCache.size,
     serverTime: new Date().toISOString(),
@@ -388,7 +388,7 @@ async function dispatchMail(payload: OutboundMailPayload): Promise<boolean> {
 
 // Server Time Persistence (1000-day bar)
 const SERVER_TIME_MAX_DAYS = 1000;
-const SERVER_TIME_INITIAL_DAYS = 14;
+const SERVER_TIME_INITIAL_DAYS = 100;
 const SERVER_TIME_EXTEND_STEP = 1;
 const SERVER_TIME_FILE = '/tmp/bhartiyamarket-server-time.json';
 
@@ -446,7 +446,7 @@ async function evaluateServerTimeCountdown(): Promise<ServerTimeState> {
     serverTimeState.lowAlertSent = true;
     saveServerTimeState(serverTimeState);
     await dispatchMail({
-      from: 'bhartiyamarket@yopmail.com',
+      from: 'support@bhartiyamarket.com',
       to: process.env.ALERT_EMAIL_TO?.trim() || 'admin@bhartiyamarket.com',
       subject: 'Bhartiya Market 15 days left',
       text: `Alert: Bhartiya Market server time is critically low (${serverTimeState.daysRemaining} days left out of ${SERVER_TIME_MAX_DAYS} days). Please renew or extend server time.`,
@@ -519,7 +519,7 @@ app.post('/api/feedback', async (req: Request, res: Response) => {
   }
 
   const emailDispatched = await dispatchMail({
-    from: 'bhartiyamarket@yopmail.com',
+    from: 'support@bhartiyamarket.com',
     to: 'agrominrastogi@gmail.com',
     replyTo: contact.includes('@') ? contact : undefined,
     subject: `Bhartiya Market Feedback from ${name || contact}`,

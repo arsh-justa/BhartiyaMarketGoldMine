@@ -11,7 +11,7 @@ export interface PeriodRecord {
   period: string;             // e.g. "Q1 FY24" or "FY24"
   label: string;              // e.g. "Jun 2023" or "FY 2023-24"
   shortLabel?: string;        // e.g. "24 Jun" or "FY24"
-  monthKey?: string;          // e.g. "2023-06" for mapping live Yahoo Finance monthly data
+  monthKey?: string;          // e.g. "2023-06" for mapping live monthly market data
   marketCapCr: number | null; // Blue Y-Axis (in INR Crores)
   patCr: number | null;       // Green Y-Axis (in INR Crores)
   revenueCr: number | null;   // In INR Crores
@@ -111,7 +111,7 @@ export function buildCompanyRecord(
   baseLo: number,
   growthFactor: number = 1.14 // default ~14% annualized growth
 ): IndianCompany {
-  // 1. Fetch verified live quote from Yahoo Finance
+  // 1. Apply verified live quote
   const cleanSym = symbol.toUpperCase().replace('.NS', '').replace('.BO', '');
   const live = VERIFIED_LIVE_QUOTES[cleanSym];
 

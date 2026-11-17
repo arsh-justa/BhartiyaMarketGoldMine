@@ -189,7 +189,7 @@ export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
   );
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 md:p-6 shadow-xl">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 md:p-6 shadow-sm dark:shadow-xl transition-colors">
       {/* Collapsible Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <button
@@ -198,22 +198,22 @@ export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
           aria-expanded={isExpanded}
           className="flex items-start gap-2.5 text-left group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
         >
-          <span className="mt-0.5 p-1 rounded-md bg-slate-950 border border-slate-800 text-slate-400 group-hover:text-white group-hover:border-slate-700 transition-colors shrink-0">
+          <span className="mt-0.5 p-1 rounded-md bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white group-hover:border-slate-300 dark:group-hover:border-slate-700 transition-colors shrink-0">
             {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </span>
           <div>
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Users2 className="w-5 h-5 text-blue-400 shrink-0" />
+            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Users2 className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />
               <span>Competitors &amp; Peer Comparison: {currentCompany.industry}</span>
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
               Benchmarking {currentCompany.name} against {competitors.length - 1} peers in {currentCompany.sector} (Annual PAT, Market Cap &amp; Cash from Operating Profit)
             </p>
           </div>
         </button>
 
         {/* Filter scope toggle */}
-        <div className="flex flex-wrap sm:flex-nowrap items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs font-medium max-w-full">
+        <div className="flex flex-wrap sm:flex-nowrap items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-medium max-w-full">
           <button
             type="button"
             onClick={() => {
@@ -221,7 +221,9 @@ export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
               setIsExpanded(true);
             }}
             className={`px-3 py-1.5 rounded-md transition-colors whitespace-nowrap ${
-              filterMode === 'direct-industry' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+              filterMode === 'direct-industry'
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             Direct &amp; Industry ({competitors.length})
@@ -233,7 +235,9 @@ export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
               setIsExpanded(true);
             }}
             className={`px-3 py-1.5 rounded-md transition-colors truncate max-w-full ${
-              filterMode === 'same-sector' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+              filterMode === 'same-sector'
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             All in {currentCompany.sector}
@@ -243,7 +247,7 @@ export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
 
       {/* Benchmark Rows */}
       {isExpanded && (
-      <div className="mt-4 pt-4 border-t border-slate-800 space-y-4">
+      <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
         {competitors.map((peer, idx) => {
           const isSelected = peer.id === currentCompany.id;
           const latestYearly = peer.yearlyData[peer.yearlyData.length - 1];
@@ -260,36 +264,36 @@ export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
               key={peer.id}
               className={`p-3.5 sm:p-4 rounded-xl border transition-all ${
                 isSelected
-                  ? 'bg-slate-950 border-blue-500/80 shadow-md ring-1 ring-blue-500/40'
-                  : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                  ? 'bg-blue-50/70 dark:bg-slate-950 border-blue-500/80 shadow-md ring-1 ring-blue-500/40'
+                  : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
               }`}
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-mono text-xs text-slate-500 font-bold w-6">#{idx + 1}</span>
-                  <span className="font-semibold text-sm text-white">{peer.name}</span>
-                  <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                  <span className="font-semibold text-sm text-slate-900 dark:text-white">{peer.name}</span>
+                  <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                     {peer.symbol}
                   </span>
                   {isSelected && (
-                    <span className="text-[10px] font-mono font-medium text-blue-400 px-1.5 py-0.2 rounded bg-blue-950 border border-blue-800">
+                    <span className="text-[10px] font-mono font-medium text-blue-700 dark:text-blue-400 px-1.5 py-0.2 rounded bg-blue-100 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
                       Current Focus
                     </span>
                   )}
-                  <span className="text-xs text-slate-400 hidden md:inline">· {peer.industry}</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 hidden md:inline">· {peer.industry}</span>
                 </div>
 
                 <div className="flex items-center gap-3.5 text-xs font-mono">
-                  <span className="text-slate-400">
-                    Net Margin: <strong className="text-emerald-400">{latestYearly?.patMarginPct ?? 0}%</strong>
+                  <span className="text-slate-600 dark:text-slate-400">
+                    Net Margin: <strong className="text-emerald-700 dark:text-emerald-400">{latestYearly?.patMarginPct ?? 0}%</strong>
                   </span>
-                  <span className="text-slate-400">
-                    P/E: <strong className="text-slate-200">{peer.benchmarks.peRatio}x</strong>
+                  <span className="text-slate-600 dark:text-slate-400">
+                    P/E: <strong className="text-slate-900 dark:text-slate-200">{peer.benchmarks.peRatio}x</strong>
                   </span>
                   {!isSelected && (
                     <button
                       onClick={() => onSelectCompany(peer.id)}
-                      className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 font-sans font-medium"
+                      className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 font-sans font-medium"
                     >
                       <span>Analyze</span>
                       <ArrowRight className="w-3 h-3" />
@@ -303,15 +307,15 @@ export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
                 {/* 1. Market Cap (Blue Horizontal Bar) */}
                 <div>
                   <div className="flex items-center justify-between text-xs font-mono mb-1">
-                    <span className="text-slate-400 flex items-center gap-1.5">
+                    <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
                       <span className="font-sans">Market Cap:</span>
                     </span>
-                    <span className="text-blue-400 font-bold tabular-nums">
+                    <span className="text-blue-700 dark:text-blue-400 font-bold tabular-nums">
                       {formatInrCrores(mcapCr, true)} ({formatInrCrores(mcapCr, false)})
                     </span>
                   </div>
-                  <div className="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-800/80">
+                  <div className="w-full bg-slate-200/80 dark:bg-slate-900 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-300/60 dark:border-slate-800/80">
                     <div
                       className="bg-blue-600 hover:bg-blue-500 h-full rounded-full transition-all duration-500"
                       style={{ width: `${mcapWidthPct}%` }}
@@ -322,15 +326,15 @@ export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
                 {/* 2. Annual PAT (Green Horizontal Bar - Always Annual) */}
                 <div>
                   <div className="flex items-center justify-between text-xs font-mono mb-1">
-                    <span className="text-slate-400 flex items-center gap-1.5">
+                    <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                      <span className="font-sans font-medium text-emerald-300">Annual PAT (Net Profit):</span>
+                      <span className="font-sans font-medium text-emerald-700 dark:text-emerald-300">Annual PAT (Net Profit):</span>
                     </span>
-                    <span className="text-emerald-400 font-bold tabular-nums">
+                    <span className="text-emerald-700 dark:text-emerald-400 font-bold tabular-nums">
                       {formatInrCrores(annualPatCr, false)}
                     </span>
                   </div>
-                  <div className="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-800/80">
+                  <div className="w-full bg-slate-200/80 dark:bg-slate-900 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-300/60 dark:border-slate-800/80">
                     <div
                       className="bg-emerald-600 hover:bg-emerald-500 h-full rounded-full transition-all duration-500"
                       style={{ width: `${patWidthPct}%` }}
@@ -341,15 +345,15 @@ export const CompetitorComparison: React.FC<CompetitorComparisonProps> = ({
                 {/* 3. Cash from Operating Profit (Cyan Horizontal Bar) */}
                 <div>
                   <div className="flex items-center justify-between text-xs font-mono mb-1">
-                    <span className="text-slate-400 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
-                      <span className="font-sans text-cyan-300">Cash from Operating Profit:</span>
+                    <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-cyan-500 dark:bg-cyan-400 shrink-0" />
+                      <span className="font-sans text-cyan-800 dark:text-cyan-300">Cash from Operating Profit:</span>
                     </span>
-                    <span className="text-cyan-400 font-bold tabular-nums">
+                    <span className="text-cyan-700 dark:text-cyan-400 font-bold tabular-nums">
                       {formatInrCrores(cashFromOpsCr, false)}
                     </span>
                   </div>
-                  <div className="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-800/80">
+                  <div className="w-full bg-slate-200/80 dark:bg-slate-900 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-300/60 dark:border-slate-800/80">
                     <div
                       className="bg-cyan-500 hover:bg-cyan-400 h-full rounded-full transition-all duration-500"
                       style={{ width: `${cashWidthPct}%` }}
